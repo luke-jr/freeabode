@@ -10,15 +10,26 @@
 #include <unistd.h>
 
 #include "crc.h"
+#include "nest.h"
 
-enum nbp_message_type {
-	NBPM_FETCONTROL     = 0x0082,
-	NBPM_FETPRESENCEACK = 0x008f,
-	NBPM_RESET          = 0x00ff,
-};
+#define NBP_READ_BUFFER_SIZE  0x10
 
-bool nbp_send(int fd, enum nbp_message_type cmd, void *data, size_t datasz)
+struct nbp_device *nbp_open(const char * const path)
 {
+	int fd = open("/dev/ttyO2", O_RDWR | O_NOCTTY);
+	if (fd < 0)
+		return NULL;
+	
+	struct nbp_device *nbp = malloc(sizeof(*nbp));
+	*nbp = (struct nbp_device){
+		._fd = fd,
+	};
+	return nbp;
+}
+
+bool nbp_send(struct nbp_device *nbp, enum nbp_message_type cmd, void *data, size_t datasz)
+{
+	int fd = nbp->_fd;
 	size_t bufsz = 3 + 2 + 2 + datasz + 2;
 	uint8_t buf[bufsz];
 	buf[0] = '\xd5';
@@ -35,14 +46,46 @@ bool nbp_send(int fd, enum nbp_message_type cmd, void *data, size_t datasz)
 	return (bufsz == write(fd, buf, bufsz));
 }
 
-int main(int argc, char **argv)
+static
+void _nbp_read_one(struct nbp_device * const nbp, const int c)
 {
-	int fd = open("/dev/ttyO2", O_RDWR | O_NOCTTY);
-	if (fd < 0)
+	switch (nbp->_fdstate)
 	{
-		perror("Cannot open /dev/ttyO2");
-		return 1;
+		case 0:
+invalid:
+			if (c == 0xd5)
 	}
-	nbp_send(fd, NBPM_RESET, NULL, 0);
-	return 0;
+}
+
+void nbp_read(struct nbp_device * const nbp)
+{
+	int fd = nbp->_fd;
+	bytes_t * const rdbuf = &nbp->_rdbuf;
+	
+	{
+		void * const buf = bytes_preappend(rdbuf, NBP_READ_BUFFER_SIZE);
+		ssize_t rsz = read(fd, buf, NBP_READ_BUFFER_SIZE);
+		if (rsz <= 0)
+			return;
+		bytes_postappend(rdbuf, rsz);
+	}
+	
+	if (bytes_len(rdbuf) < 3 + 2 + 2 + 2)
+		return;
+	
+	{
+		uint8_t * const buf = bytes_buf(rdbuf);
+		if (buf[0] != '\xd5' || buf[1] != '\xaa' || buf[2] != '\x96')
+		{
+invalid:
+			
+		}
+		
+	}
+}
+
+void nbp_close(struct nbp_device * const nbp)
+{
+	close(nbp->_fd);
+	free(nbp);
 }

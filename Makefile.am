@@ -1,2 +1,2 @@
 bin_PROGRAMS = freeabode
-freeabode_SOURCES = nest.c crc.c crc.h
+freeabode_SOURCES = nest.c nest.h bytes.h crc.c crc.h
