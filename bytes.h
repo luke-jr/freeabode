@@ -31,15 +31,17 @@ size_t bytes_len(const bytes_t *b)
 }
 
 static inline
-ssize_t bytes_find(const bytes_t * const b, const uint8_t needle)
+ssize_t bytes_find_next(const bytes_t * const b, const uint8_t needle, const int pos)
 {
 	const size_t blen = bytes_len(b);
 	const uint8_t * const buf = bytes_buf(b);
-	for (int i = 0; i < blen; ++i)
+	for (int i = pos; i < blen; ++i)
 		if (buf[i] == needle)
 			return i;
 	return -1;
 }
+
+#define bytes_find(b, needle)  bytes_find_next(b, needle, 0)
 
 static inline
 bool bytes_eq(const bytes_t * const a, const bytes_t * const b)
