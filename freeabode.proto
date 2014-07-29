@@ -1,0 +1,4 @@
+message PbWeather {
+	optional int32 temperature = 1;
+	optional int32 humidity = 2;
+}

@@ -24,5 +24,18 @@ AC_TYPE_UINT8_T
 AC_CHECK_LIB([rt],[clock_gettime])
 AC_CHECK_FUNCS([clock_gettime gettimeofday memmove])
 
+PKG_CHECK_MODULES([PROTOBUF_C], [libprotobuf-c >= 1.0.0])
+AC_ARG_WITH([protoc-c],
+	[AS_HELP_STRING([--with-protoc-c=/path/of/protoc-c],
+		[Location of the protocol buffers compiler protoc-c. Defaults to looking on path.])],
+	[PROTOC_C="$withval"],
+	[ AS_IF([test "x${PROTOC_C}" == "x"],
+		[AC_PATH_PROG([PROTOC_C], [protoc-c], [no])])
+	]
+)
+AS_IF([test "${PROTOC_C}" == "no"], [AC_MSG_ERROR([ProtoBuf compiler "protoc-c" not found.])])
+
+PKG_CHECK_MODULES([LIBZMQ], [libzmq])
+
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
