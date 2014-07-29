@@ -18,7 +18,8 @@ void msg_log(struct nbp_device *nbp, const struct timespec *now, const char *msg
 
 void msg_weather(struct nbp_device *nbp, const struct timespec *now, uint16_t temperature, uint16_t humidity)
 {
-	printf("Temperature %d.%02d C  Humidity: %d.%d\n", temperature / 100, temperature % 100, humidity / 10, humidity % 10);
+	int32_t fahrenheit = ((int32_t)temperature) * 90 / 5 + 32000;
+	printf("Temperature %3d.%02d C (%4d.%03d F)    Humidity: %d.%d%%\n", temperature / 100, temperature % 100, fahrenheit / 1000, fahrenheit % 1000, humidity / 10, humidity % 10);
 }
 
 int main(int argc, char **argv)
