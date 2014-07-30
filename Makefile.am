@@ -1,5 +1,5 @@
 bin_PROGRAMS = freeabode
-freeabode_SOURCES = main.c nest.c nest.h bytes.h crc.c crc.h
+freeabode_SOURCES = main.c nest.c nest.h bytes.h crc.c crc.h zap.c zap.h
 freeabode_CFLAGS = $(LIBZMQ_CFLAGS) $(PROTOBUF_C_CFLAGS)
 freeabode_LDADD = $(LIBZMQ_LIBS) $(PROTOBUF_C_LIBS)
 
