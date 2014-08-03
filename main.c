@@ -8,19 +8,31 @@
 #include "nest.h"
 #include "freeabode.pb-c.h"
 #include "security.h"
+#include "util.h"
 
 static const int periodic_req_interval = 30;
 
 static void *my_zmq_context, *my_zmq_publisher;
 static struct timespec ts_last_periodic_req;
 
-
 static
 void request_periodic(struct nbp_device *nbp, const struct timespec *now)
 {
 	ts_last_periodic_req = *now;
 	nbp_send(nbp, NBPM_REQ_PERIODIC, NULL, 0);
+#ifdef DEBUG_NBP
+	puts("Periodic data request");
+#endif
 }
+
+#ifdef DEBUG_NBP
+void debug_msg(struct nbp_device * const nbp, const struct timespec * const now, const enum nbp_message_type mtype, const void * const data, const size_t datasz)
+{
+	char hexdata[(datasz * 2) + 1];
+	bin2hex(hexdata, data, datasz);
+	printf("msg %04x data %s\n", mtype, hexdata);
+}
+#endif
 
 static
 void reset_complete(struct nbp_device *nbp, const struct timespec *now, uint16_t fet_bitmask)
@@ -68,6 +80,9 @@ int main(int argc, char **argv)
 	
 	struct nbp_device *nbp = nbp_open("/dev/ttyO2");
 	assert(nbp_send(nbp, NBPM_RESET, NULL, 0));
+#ifdef DEBUG_NBP
+	nbp->cb_msg = debug_msg;
+#endif
 	nbp->cb_msg_fet_presence = reset_complete;
 	nbp->cb_msg_log = msg_log;
 	nbp->cb_msg_weather = msg_weather;
