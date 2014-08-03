@@ -7,6 +7,9 @@
 #include <zmq.h>
 #include <zmq_utils.h>
 
+#include "bytes.h"
+#include "main.h"
+
 static
 void zap_handler(void *handler)
 {
@@ -49,7 +52,8 @@ void zap_handler(void *handler)
 		else
 		if (!problem)
 		{
-			// TODO: check key
+			if (memcmp(bytes_buf(freeabode_pubkey), buf, 0x20))
+				problem = true;
 		}
 		
 		zmq_send(handler, my_zap_ver, sizeof(my_zap_ver), ZMQ_SNDMORE);
