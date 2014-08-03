@@ -42,10 +42,6 @@ void reset_complete(struct nbp_device *nbp, const struct timespec *now, uint16_t
 	
 	request_periodic(nbp, now);
 	
-	my_zmq_context = zmq_ctx_new();
-	
-	start_zap_handler(my_zmq_context);
-	
 	my_zmq_publisher = zmq_socket(my_zmq_context, ZMQ_PUB);
 	
 	freeabode_zmq_security(my_zmq_publisher, true);
@@ -71,6 +67,20 @@ void msg_weather(struct nbp_device *nbp, const struct timespec *now, uint16_t te
 	zmq_send_protobuf(my_zmq_publisher, pb_weather, &pb, 0);
 }
 
+void handle_req(void * const s, struct nbp_device * const nbp)
+{
+	PbRequest *req;
+	zmq_recv_protobuf(s, pb_request, req, NULL);
+	PbRequestReply reply = PB_REQUEST_REPLY__INIT;
+	reply.n_sethvacwiresuccess = req->n_sethvacwire;
+	reply.sethvacwiresuccess = malloc(sizeof(*reply.sethvacwiresuccess) * reply.n_sethvacwiresuccess);
+	for (size_t i = 0; i < req->n_sethvacwire; ++i)
+		reply.sethvacwiresuccess[i] = nbp_control_fet(nbp, req->sethvacwire[i]->wire, req->sethvacwire[i]->connect);
+	pb_request__free_unpacked(req, NULL);
+	zmq_send_protobuf(s, pb_request_reply, &reply, 0);
+	free(reply.sethvacwiresuccess);
+}
+
 int main(int argc, char **argv)
 {
 	load_freeabode_key();
@@ -84,9 +94,18 @@ int main(int argc, char **argv)
 	nbp->cb_msg_log = msg_log;
 	nbp->cb_msg_weather = msg_weather;
 	
+	my_zmq_context = zmq_ctx_new();
+	start_zap_handler(my_zmq_context);
+	
+	void *my_zmq_ctl = zmq_socket(my_zmq_context, ZMQ_REP);
+	freeabode_zmq_security(my_zmq_ctl, true);
+	assert(!zmq_bind(my_zmq_ctl, "tcp://*:2930"));
+	assert(!zmq_bind(my_zmq_ctl, "ipc://nbp.ipc"));
+	
 	struct timespec ts_now;
 	zmq_pollitem_t pollitems[] = {
 		{ .fd = nbp->_fd, .events = ZMQ_POLLIN },
+		{ .socket = my_zmq_ctl, .events = ZMQ_POLLIN },
 	};
 	while (true)
 	{
@@ -97,5 +116,7 @@ int main(int argc, char **argv)
 			continue;
 		if (pollitems[0].revents & ZMQ_POLLIN)
 			nbp_read(nbp);
+		if (pollitems[1].revents & ZMQ_POLLIN)
+			handle_req(my_zmq_ctl, nbp);
 	}
 }

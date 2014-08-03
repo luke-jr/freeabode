@@ -1,4 +1,27 @@
+enum PbHVACWires {
+	W1 = 0;
+	Y1 = 1;
+	G  = 2;
+	OB = 3;
+	W2 = 4;
+	Y2 = 7;
+	Star = 0xb;
+}
+
 message PbWeather {
 	optional int32 temperature = 1;
 	optional int32 humidity = 2;
+}
+
+message PbSetHVACWireRequest {
+	required PbHVACWires wire = 1;
+	required bool connect = 2;
+}
+
+message PbRequest {
+	repeated PbSetHVACWireRequest SetHVACWire = 1;
+}
+
+message PbRequestReply {
+	repeated bool SetHVACWireSuccess = 1;
 }
