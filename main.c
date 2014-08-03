@@ -47,21 +47,37 @@ void load_freeabode_key()
 	if (bytes_len(&freeabode__privkey))
 		return;
 	
-	bytes_t rv = BYTES_INIT;
 	FILE *F = fopen("secretkey", "r");
 	assert(F);
 	assert(!fseek(F, 0, SEEK_END));
 	long sz = ftell(F);
 	assert(sz >= 0);
-	bytes_resize(&rv, sz);
-	bytes_nullterminate(&rv);
+	char ibuf[sz + 1];
+	mlock(ibuf, sz);
+	rewind(F);
+	assert(1 == fread(ibuf, sz, 1, F));
+	ibuf[sz] = '\0';
+	fclose(F);
+	
+	bytes_t rv = BYTES_INIT;
+	bytes_resize(&rv, 0x20);
 	// Be careful not to cause realloc after mlock!
 	void * const buf = bytes_buf(&rv);
-	mlock(buf, sz);
-	rewind(F);
-	sz = fread(buf, 1, sz, F);
-	assert(sz == bytes_len(&rv));
-	fclose(F);
+	mlock(buf, 0x20);
+	switch (sz)
+	{
+		case 0x20:
+			memcpy(buf, ibuf, 0x20);
+			break;
+		case 0x28:
+			assert(zmq_z85_decode(buf, ibuf));
+			break;
+		default:
+			assert(0 && "Invalid private key size");
+	}
+	memset(ibuf, '\0', sz);
+	munlock(ibuf, sz);
+	
 	bytes_free(&freeabode__privkey);
 	freeabode__privkey = rv;
 	// NOTE: rv is being copied directly, and should not be used anymore!
