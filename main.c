@@ -31,10 +31,20 @@ bytes_t get_secret_key()
 	return rv;
 }
 
-void reset_complete(struct nbp_device *nbp, const struct timespec *now, enum nbp_message_type mtype, const void *data, size_t datasz)
+static
+void request_periodic(struct nbp_device *nbp, const struct timespec *now)
 {
-	nbp->cb_msg = NULL;
+	nbp_send(nbp, NBPM_REQ_PERIODIC, NULL, 0);
+}
+
+static
+void reset_complete(struct nbp_device *nbp, const struct timespec *now, uint16_t fet_bitmask)
+{
+	nbp->cb_msg_fet_presence = NULL;
 	printf("Backplate reset complete\n");
+	
+	request_periodic(nbp, now);
+	
 	my_zmq_context = zmq_ctx_new();
 	
 	start_zap_handler(my_zmq_context);
@@ -75,7 +85,7 @@ int main(int argc, char **argv)
 {
 	struct nbp_device *nbp = nbp_open("/dev/ttyO2");
 	assert(nbp_send(nbp, NBPM_RESET, NULL, 0));
-	nbp->cb_msg = reset_complete;
+	nbp->cb_msg_fet_presence = reset_complete;
 	nbp->cb_msg_log = msg_log;
 	nbp->cb_msg_weather = msg_weather;
 	zmq_pollitem_t pollitems[] = {

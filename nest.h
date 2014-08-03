@@ -29,6 +29,7 @@ enum nbp_message_type {
 
 struct nbp_device {
 	void (*cb_msg)(struct nbp_device *, const struct timespec *now, enum nbp_message_type, const void *data, size_t datasz);
+	void (*cb_msg_fet_presence)(struct nbp_device *, const struct timespec *now, uint16_t fet_bitmask);
 	void (*cb_msg_log)(struct nbp_device *, const struct timespec *now, const char *);
 	void (*cb_msg_weather)(struct nbp_device *, const struct timespec *now, uint16_t temperature, uint16_t humidity);
 	

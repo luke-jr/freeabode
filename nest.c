@@ -80,13 +80,16 @@ void nbp_got_message(struct nbp_device * const nbp, uint8_t * const buf, const s
 		case NBPM_FET_PRESENCE:
 		{
 			nbp_send(nbp, NBPM_FET_PRESENCE_ACK, buf, sz);
-			nbp_send(nbp, NBPM_REQ_PERIODIC, NULL, 0);
 			
 			uint16_t p = 0;
 			for (int i = 0; i < sz; ++i)
 				if (buf[i])
 					p |= 1 << i;
 			nbp->_fet_presence = p;
+			
+			if (nbp->cb_msg_fet_presence)
+				nbp->cb_msg_fet_presence(nbp, now, p);
+			
 			break;
 		}
 		default:
