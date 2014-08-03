@@ -68,10 +68,7 @@ void msg_weather(struct nbp_device *nbp, const struct timespec *now, uint16_t te
 	pb.temperature = temperature;
 	pb.has_humidity = true;
 	pb.humidity = humidity;
-	size_t pbsz = pb_weather__get_packed_size(&pb);
-	uint8_t pbbuf[pbsz];
-	pb_weather__pack(&pb, pbbuf);
-	zmq_send(my_zmq_publisher, pbbuf, pbsz, 0);
+	zmq_send_protobuf(my_zmq_publisher, pb_weather, &pb, 0);
 }
 
 int main(int argc, char **argv)

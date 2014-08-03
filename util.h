@@ -33,4 +33,11 @@ void timespec_add(const struct timespec *a, const struct timespec *b, struct tim
 	}
 }
 
+#define zmq_send_protobuf(s, type, data, flags)  do{  \
+	size_t _pbsz = type ## __get_packed_size(data);  \
+	uint8_t _pbbuf[_pbsz];  \
+	type ## __pack(data, _pbbuf);  \
+	zmq_send(s, _pbbuf, _pbsz, flags);  \
+}while(0)
+
 #endif
