@@ -20,10 +20,17 @@ struct nbp_device *nbp_open(const char * const path)
 	if (fd < 0)
 		return NULL;
 	
-	struct nbp_device *nbp = malloc(sizeof(*nbp));
+	void *mem = malloc(sizeof(struct nbp_device) + (sizeof(struct nbp_fet_data) * NBPF__COUNT));
+	struct nbp_device *nbp = mem;
 	*nbp = (struct nbp_device){
 		._fd = fd,
+		._fet = mem + sizeof(struct nbp_device),
 	};
+	for (int i = 0; i < NBPF__COUNT; ++i)
+		nbp->_fet[i] = (struct nbp_fet_data){
+			._present = FTS_UNKNOWN,
+			._asserted = FTS_UNKNOWN,
+		};
 	return nbp;
 }
 
@@ -83,9 +90,12 @@ void nbp_got_message(struct nbp_device * const nbp, uint8_t * const buf, const s
 			
 			uint16_t p = 0;
 			for (int i = 0; i < sz; ++i)
+			{
+				if (i < NBPF__COUNT)
+					nbp->_fet[i]._present = buf[i];
 				if (buf[i])
 					p |= 1 << i;
-			nbp->_fet_presence = p;
+			}
 			
 			if (nbp->cb_msg_fet_presence)
 				nbp->cb_msg_fet_presence(nbp, now, p);
@@ -157,9 +167,7 @@ bool nbp_control_fet(struct nbp_device * const nbp, const enum nbp_fet fet, cons
 	uint8_t data[2] = {fet, connect};
 	if (!nbp_send(nbp, NBPM_FET_CONTROL, data, sizeof(data)))
 		return false;
-	if (connect)
-		nbp->_fet_asserted |= 1 << fet;
-	else
-		nbp->_fet_asserted &= ~(1 << fet);
+	if (fet < NBPF__COUNT)
+		nbp->_fet[fet]._asserted = connect;
 	return true;
 }

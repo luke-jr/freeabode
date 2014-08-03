@@ -4,6 +4,7 @@
 #include <time.h>
 
 #include "bytes.h"
+#include "util.h"
 
 enum nbp_fet {
 	NBPF_W1   =   0,
@@ -15,6 +16,8 @@ enum nbp_fet {
 	NBPF_Y2   =   7,
 	
 	NBPF_Star = 0xb,
+	
+	NBPF__COUNT = 0xd,
 };
 
 enum nbp_message_type {
@@ -25,6 +28,11 @@ enum nbp_message_type {
 	NBPM_REQ_PERIODIC   = 0x0083,
 	NBPM_FET_PRESENCE_ACK = 0x008f,
 	NBPM_RESET          = 0x00ff,
+};
+
+struct nbp_fet_data {
+	enum fabd_tristate _present;
+	enum fabd_tristate _asserted;
 };
 
 struct nbp_device {
@@ -39,8 +47,7 @@ struct nbp_device {
 	
 	int _fd;
 	bytes_t _rdbuf;
-	uint16_t _fet_presence;
-	uint16_t _fet_asserted;
+	struct nbp_fet_data *_fet;
 };
 
 extern struct nbp_device *nbp_open(const char *path);
@@ -49,9 +56,9 @@ extern void nbp_read(struct nbp_device *);
 extern void nbp_close(struct nbp_device *);
 
 static inline
-bool nbp_get_fet_presence(struct nbp_device *nbp, enum nbp_fet fet)
+enum fabd_tristate nbp_get_fet_presence(struct nbp_device *nbp, enum nbp_fet fet)
 {
-	return nbp->_fet_presence & (1 << fet);
+	return (fet >= NBPF__COUNT) ? FTS_UNKNOWN : nbp->_fet[fet]._present;
 }
 
 extern bool nbp_control_fet(struct nbp_device *, enum nbp_fet, bool connect);
