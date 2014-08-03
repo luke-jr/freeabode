@@ -20,6 +20,9 @@ struct nbp_device *nbp_open(const char * const path)
 	if (fd < 0)
 		return NULL;
 	
+	struct timespec ts_now;
+	clock_gettime(CLOCK_MONOTONIC, &ts_now);
+	
 	void *mem = malloc(sizeof(struct nbp_device) + (sizeof(struct nbp_fet_data) * NBPF__COUNT));
 	struct nbp_device *nbp = mem;
 	*nbp = (struct nbp_device){
@@ -30,6 +33,7 @@ struct nbp_device *nbp_open(const char * const path)
 		nbp->_fet[i] = (struct nbp_fet_data){
 			._present = FTS_UNKNOWN,
 			._asserted = FTS_UNKNOWN,
+			._ts_last_shutoff = ts_now,
 		};
 	return nbp;
 }
@@ -168,6 +172,10 @@ bool nbp_control_fet(struct nbp_device * const nbp, const enum nbp_fet fet, cons
 	if (!nbp_send(nbp, NBPM_FET_CONTROL, data, sizeof(data)))
 		return false;
 	if (fet < NBPF__COUNT)
+	{
+		if (nbp->_fet[fet]._asserted != FTS_FALSE && !connect)
+			clock_gettime(CLOCK_MONOTONIC, &nbp->_fet[fet]._ts_last_shutoff);
 		nbp->_fet[fet]._asserted = connect;
+	}
 	return true;
 }

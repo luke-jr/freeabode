@@ -33,6 +33,7 @@ enum nbp_message_type {
 struct nbp_fet_data {
 	enum fabd_tristate _present;
 	enum fabd_tristate _asserted;
+	struct timespec _ts_last_shutoff;
 };
 
 struct nbp_device {
