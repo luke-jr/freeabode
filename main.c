@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <sys/mman.h>
 
 #include <zmq.h>
 
@@ -15,23 +16,31 @@ static void *my_zmq_context, *my_zmq_publisher;
 static const int int_one = 1;
 static struct timespec ts_last_periodic_req;
 
-static
-bytes_t get_secret_key()
+static bytes_t freeabode__privkey = BYTES_INIT;
+
+void load_freeabode_key()
 {
-	bytes_t rv = BYTES_INIT;
+	if (bytes_len(&freeabode__privkey))
+		return;
 	
+	bytes_t rv = BYTES_INIT;
 	FILE *F = fopen("secretkey", "r");
 	assert(F);
 	assert(!fseek(F, 0, SEEK_END));
 	long sz = ftell(F);
 	assert(sz >= 0);
 	bytes_resize(&rv, sz);
+	bytes_nullterminate(&rv);
+	// Be careful not to cause realloc after mlock!
+	void * const buf = bytes_buf(&rv);
+	mlock(buf, sz);
 	rewind(F);
-	sz = fread(bytes_buf(&rv), 1, sz, F);
-	assert(sz >= 0);
-	bytes_resize(&rv, sz);
+	sz = fread(buf, 1, sz, F);
+	assert(sz == bytes_len(&rv));
 	fclose(F);
-	return rv;
+	bytes_free(&freeabode__privkey);
+	freeabode__privkey = rv;
+	// NOTE: rv is being copied directly, and should not be used anymore!
 }
 
 static
@@ -56,10 +65,7 @@ void reset_complete(struct nbp_device *nbp, const struct timespec *now, uint16_t
 	my_zmq_publisher = zmq_socket(my_zmq_context, ZMQ_PUB);
 	
 	zmq_setsockopt(my_zmq_publisher, ZMQ_CURVE_SERVER, &int_one, sizeof(int_one));
-	bytes_t seckey = get_secret_key();
-	bytes_nullterminate(&seckey);
-	zmq_setsockopt(my_zmq_publisher, ZMQ_CURVE_SECRETKEY, bytes_buf(&seckey), bytes_len(&seckey));
-	bytes_free(&seckey);
+	zmq_setsockopt(my_zmq_publisher, ZMQ_CURVE_SECRETKEY, bytes_buf(&freeabode__privkey), bytes_len(&freeabode__privkey));
 	assert(!zmq_bind(my_zmq_publisher, "tcp://*:2929"));
 	assert(!zmq_bind(my_zmq_publisher, "ipc://weather.ipc"));
 }
@@ -87,6 +93,8 @@ void msg_weather(struct nbp_device *nbp, const struct timespec *now, uint16_t te
 
 int main(int argc, char **argv)
 {
+	load_freeabode_key();
+	
 	struct nbp_device *nbp = nbp_open("/dev/ttyO2");
 	assert(nbp_send(nbp, NBPM_RESET, NULL, 0));
 	nbp->cb_msg_fet_presence = reset_complete;
