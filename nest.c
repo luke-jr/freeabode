@@ -12,6 +12,8 @@
 #include "crc.h"
 #include "nest.h"
 
+#define NBP_DEFAULT_SHUTOFF_DELAY  { .tv_sec = 337, .tv_nsec = 500000000, }
+
 #define NBP_READ_BUFFER_SIZE  0x10
 
 struct nbp_device *nbp_open(const char * const path)
@@ -31,6 +33,7 @@ struct nbp_device *nbp_open(const char * const path)
 	};
 	for (int i = 0; i < NBPF__COUNT; ++i)
 		nbp->_fet[i] = (struct nbp_fet_data){
+			.ts_shutoff_delay = NBP_DEFAULT_SHUTOFF_DELAY,
 			._present = FTS_UNKNOWN,
 			._asserted = FTS_UNKNOWN,
 			._ts_last_shutoff = ts_now,
@@ -166,7 +169,7 @@ void nbp_close(struct nbp_device * const nbp)
 	free(nbp);
 }
 
-bool nbp_control_fet(struct nbp_device * const nbp, const enum nbp_fet fet, const bool connect)
+bool nbp_control_fet_unsafe(struct nbp_device * const nbp, const enum nbp_fet fet, const bool connect)
 {
 	uint8_t data[2] = {fet, connect};
 	if (!nbp_send(nbp, NBPM_FET_CONTROL, data, sizeof(data)))
@@ -178,4 +181,21 @@ bool nbp_control_fet(struct nbp_device * const nbp, const enum nbp_fet fet, cons
 		nbp->_fet[fet]._asserted = connect;
 	}
 	return true;
+}
+
+bool nbp_control_fet(struct nbp_device * const nbp, const enum nbp_fet fet, const bool connect)
+{
+	if (fet >= NBPF__COUNT)
+		// Assume unknown FETs are always unsafe, since we have no safety controls
+		return false;
+	const struct timespec *ts_shutoff_delay = &nbp->_fet[fet].ts_shutoff_delay;
+	if (connect && (ts_shutoff_delay->tv_sec || ts_shutoff_delay->tv_nsec))
+	{
+		struct timespec ts_soonest_cycle, ts_now;
+		timespec_add(&nbp->_fet[fet]._ts_last_shutoff, ts_shutoff_delay, &ts_soonest_cycle);
+		clock_gettime(CLOCK_MONOTONIC, &ts_now);
+		if (timespec_cmp(&ts_now, &ts_soonest_cycle) < 0)
+			return false;
+	}
+	return nbp_control_fet_unsafe(nbp, fet, connect);
 }

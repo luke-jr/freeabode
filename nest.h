@@ -31,6 +31,8 @@ enum nbp_message_type {
 };
 
 struct nbp_fet_data {
+	struct timespec ts_shutoff_delay;
+	
 	enum fabd_tristate _present;
 	enum fabd_tristate _asserted;
 	struct timespec _ts_last_shutoff;
@@ -62,6 +64,7 @@ enum fabd_tristate nbp_get_fet_presence(struct nbp_device *nbp, enum nbp_fet fet
 	return (fet >= NBPF__COUNT) ? FTS_UNKNOWN : nbp->_fet[fet]._present;
 }
 
+extern bool nbp_control_fet_unsafe(struct nbp_device *, enum nbp_fet, bool connect);
 extern bool nbp_control_fet(struct nbp_device *, enum nbp_fet, bool connect);
 
 #endif
