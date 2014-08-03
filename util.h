@@ -40,4 +40,12 @@ void timespec_add(const struct timespec *a, const struct timespec *b, struct tim
 	zmq_send(s, _pbbuf, _pbsz, flags);  \
 }while(0)
 
+#define zmq_recv_protobuf(s, type, data, allocator)  do{  \
+	zmq_msg_t _zmqmsg;  \
+	assert(!zmq_msg_init(&_zmqmsg));  \
+	assert(zmq_msg_recv(&_zmqmsg, s, 0) >= 0);  \
+	data = type ## __unpack(allocator, zmq_msg_size(&_zmqmsg), zmq_msg_data(&_zmqmsg));  \
+	zmq_msg_close(&_zmqmsg);  \
+}while(0)
+
 #endif
