@@ -40,6 +40,7 @@ struct nbp_device {
 	int _fd;
 	bytes_t _rdbuf;
 	uint16_t _fet_presence;
+	uint16_t _fet_asserted;
 };
 
 extern struct nbp_device *nbp_open(const char *path);

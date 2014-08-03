@@ -155,5 +155,11 @@ void nbp_close(struct nbp_device * const nbp)
 bool nbp_control_fet(struct nbp_device * const nbp, const enum nbp_fet fet, const bool connect)
 {
 	uint8_t data[2] = {fet, connect};
-	return nbp_send(nbp, NBPM_FET_CONTROL, data, sizeof(data));
+	if (!nbp_send(nbp, NBPM_FET_CONTROL, data, sizeof(data)))
+		return false;
+	if (connect)
+		nbp->_fet_asserted |= 1 << fet;
+	else
+		nbp->_fet_asserted &= ~(1 << fet);
+	return true;
 }
