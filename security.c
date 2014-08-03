@@ -32,7 +32,7 @@ bytes_t convert_private_key_to_public(const bytes_t privkey_in)
 			return ret;
 		}
 	}
-	bytes_resize(&ret, 0x28);
+	bytes_resize(&ret, 0x20);
 	crypto_scalarmult_base(bytes_buf(&ret), privkey);
 	return ret;
 }
@@ -77,6 +77,7 @@ void load_freeabode_key()
 	freeabode__privkey = rv;
 	// NOTE: rv is being copied directly, and should not be used anymore!
 	
+	bytes_free(&freeabode__pubkey);
 	freeabode__pubkey = convert_private_key_to_public(freeabode__privkey);
 }
 
