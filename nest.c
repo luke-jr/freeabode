@@ -99,7 +99,12 @@ void nbp_got_message(struct nbp_device * const nbp, uint8_t * const buf, const s
 			for (int i = 0; i < sz; ++i)
 			{
 				if (i < NBPF__COUNT)
+				{
+					if (nbp->_fet[i]._present != FTS_FALSE && nbp->_fet[i]._asserted != FTS_FALSE)
+						// For safety, assert disconnection
+						nbp_control_fet_unsafe(nbp, i, false);
 					nbp->_fet[i]._present = buf[i];
+				}
 				if (buf[i])
 					p |= 1 << i;
 			}
