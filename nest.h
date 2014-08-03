@@ -21,7 +21,7 @@ enum nbp_message_type {
 	NBPM_LOG            = 0x0001,
 	NBPM_WEATHER        = 0x0002,
 	NBPM_FET_PRESENCE   = 0x0004,
-	NBPM_FETCONTROL     = 0x0082,
+	NBPM_FET_CONTROL    = 0x0082,
 	NBPM_REQ_PERIODIC   = 0x0083,
 	NBPM_FET_PRESENCE_ACK = 0x008f,
 	NBPM_RESET          = 0x00ff,
@@ -52,5 +52,7 @@ bool nbp_get_fet_presence(struct nbp_device *nbp, enum nbp_fet fet)
 {
 	return nbp->_fet_presence & (1 << fet);
 }
+
+extern bool nbp_control_fet(struct nbp_device *, enum nbp_fet, bool connect);
 
 #endif
