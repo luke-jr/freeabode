@@ -78,6 +78,14 @@ int main(int argc, char **argv)
 	nbp->cb_msg = reset_complete;
 	nbp->cb_msg_log = msg_log;
 	nbp->cb_msg_weather = msg_weather;
+	zmq_pollitem_t pollitems[] = {
+		{ .fd = nbp->_fd, .events = ZMQ_POLLIN },
+	};
 	while (true)
-		nbp_read(nbp);
+	{
+		if (zmq_poll(pollitems, sizeof(pollitems) / sizeof(*pollitems), -1) <= 0)
+			continue;
+		if (pollitems[0].revents & ZMQ_POLLIN)
+			nbp_read(nbp);
+	}
 }
