@@ -9,8 +9,11 @@
 #include "freeabode.pb-c.h"
 #include "zap.h"
 
+static const int periodic_req_interval = 30;
+
 static void *my_zmq_context, *my_zmq_publisher;
 static const int int_one = 1;
+static struct timespec ts_last_periodic_req;
 
 static
 bytes_t get_secret_key()
@@ -34,6 +37,7 @@ bytes_t get_secret_key()
 static
 void request_periodic(struct nbp_device *nbp, const struct timespec *now)
 {
+	ts_last_periodic_req = *now;
 	nbp_send(nbp, NBPM_REQ_PERIODIC, NULL, 0);
 }
 
@@ -88,11 +92,16 @@ int main(int argc, char **argv)
 	nbp->cb_msg_fet_presence = reset_complete;
 	nbp->cb_msg_log = msg_log;
 	nbp->cb_msg_weather = msg_weather;
+	
+	struct timespec ts_now;
 	zmq_pollitem_t pollitems[] = {
 		{ .fd = nbp->_fd, .events = ZMQ_POLLIN },
 	};
 	while (true)
 	{
+		clock_gettime(CLOCK_MONOTONIC, &ts_now);
+		if (ts_now.tv_sec - periodic_req_interval > ts_last_periodic_req.tv_sec)
+			request_periodic(nbp, &ts_now);
 		if (zmq_poll(pollitems, sizeof(pollitems) / sizeof(*pollitems), -1) <= 0)
 			continue;
 		if (pollitems[0].revents & ZMQ_POLLIN)
