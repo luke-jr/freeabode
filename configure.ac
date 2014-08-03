@@ -35,6 +35,7 @@ AC_ARG_WITH([protoc-c],
 )
 AS_IF([test "${PROTOC_C}" == "no"], [AC_MSG_ERROR([ProtoBuf compiler "protoc-c" not found.])])
 
+PKG_CHECK_MODULES([LIBSODIUM], [libsodium])
 PKG_CHECK_MODULES([LIBZMQ], [libzmq])
 
 AC_CONFIG_FILES([Makefile])

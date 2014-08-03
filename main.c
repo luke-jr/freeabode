@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <sys/mman.h>
 
+#include <sodium/crypto_scalarmult.h>
 #include <zmq.h>
 
 #include "nest.h"
@@ -17,6 +18,29 @@ static const int int_one = 1;
 static struct timespec ts_last_periodic_req;
 
 static bytes_t freeabode__privkey = BYTES_INIT;
+bytes_t freeabode__pubkey = BYTES_INIT;
+
+static
+bytes_t convert_private_key_to_public(const bytes_t privkey_in)
+{
+	bytes_t ret = BYTES_INIT;
+	uint8_t privkey[32];
+	if (bytes_len(&privkey_in) == 0x20)
+		memcpy(privkey, bytes_buf(&privkey_in), 0x20);
+	else
+	{
+		bytes_cpy(&ret, &privkey_in);
+		bytes_nullterminate(&ret);
+		if (!zmq_z85_decode(privkey, (char*)bytes_buf(&ret)))
+		{
+			bytes_free(&ret);
+			return ret;
+		}
+	}
+	bytes_resize(&ret, 0x28);
+	crypto_scalarmult_base(bytes_buf(&ret), privkey);
+	return ret;
+}
 
 void load_freeabode_key()
 {
@@ -41,6 +65,8 @@ void load_freeabode_key()
 	bytes_free(&freeabode__privkey);
 	freeabode__privkey = rv;
 	// NOTE: rv is being copied directly, and should not be used anymore!
+	
+	freeabode__pubkey = convert_private_key_to_public(freeabode__privkey);
 }
 
 static
