@@ -19,10 +19,10 @@ pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libfreeabode.pc
 
 freeabode_SOURCES = main.c nest.c nest.h crc.c crc.h
-freeabode_LDADD = -lfreeabode
+freeabode_LDADD = libfreeabode.la
 
 remctl_SOURCES = remctl.c
-remctl_LDADD = -lfreeabode
+remctl_LDADD = libfreeabode.la
 
 dist_noinst_DATA = freeabode.proto
 MOSTLYCLEANFILES = freeabode.pb-c.c freeabode.pb-c.h
