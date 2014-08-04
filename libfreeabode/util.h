@@ -12,6 +12,7 @@ enum fabd_tristate {
 };
 
 extern void bin2hex(char *, const void *, size_t);
+extern bool hex2bin(unsigned char *, const char *, size_t);
 
 static inline
 int timespec_cmp(const struct timespec *a, const struct timespec *b)

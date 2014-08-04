@@ -1,5 +1,6 @@
 #include "config.h"
 
+#include <ctype.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -18,7 +19,11 @@
 
 struct nbp_device *nbp_open(const char * const path)
 {
+#ifdef NBP_SIMULATE
+	int fd = fileno(stdin);
+#else
 	int fd = open("/dev/ttyO2", O_RDWR | O_NOCTTY);
+#endif
 	if (fd < 0)
 		return NULL;
 	
@@ -43,6 +48,13 @@ struct nbp_device *nbp_open(const char * const path)
 
 bool nbp_send(struct nbp_device *nbp, enum nbp_message_type cmd, void *data, size_t datasz)
 {
+#ifdef NBP_SIMULATE
+	char hexdata[(datasz * 2) + 1];
+	bin2hex(hexdata, data, datasz);
+	printf("%04lx %s\n", (unsigned long)cmd, hexdata);
+	return true;
+#endif
+	
 	int fd = nbp->_fd;
 	size_t bufsz = 3 + 2 + 2 + datasz + 2;
 	uint8_t buf[bufsz];
@@ -133,6 +145,30 @@ void nbp_read(struct nbp_device * const nbp)
 		clock_gettime(CLOCK_MONOTONIC, &now);
 		bytes_postappend(rdbuf, rsz);
 	}
+	
+#ifdef NBP_SIMULATE
+	int pos;
+	while ( (pos = bytes_find(rdbuf, '\n')) != -1)
+	{
+		char *endptr, *p;
+		long msg = strtol((void*)bytes_buf(rdbuf), &endptr, 0x10);
+		while (*endptr != '\n' && isspace(*endptr))
+			++endptr;
+		p = endptr;
+		while (*endptr != '\n')
+			++endptr;
+		size_t datasz = (endptr - p) / 2;
+		uint8_t buf[4 + datasz + 1];
+		uint8_t *data = &buf[4];
+		buf[0] = msg;
+		buf[1] = msg >> 8;
+		data[datasz] = '\0';
+		hex2bin(data, p, datasz);
+		bytes_shift(rdbuf, pos + 1);
+		nbp_got_message(nbp, data, datasz, &now);
+	}
+	return;
+#endif
 	
 	while (bytes_len(rdbuf) >= 3 + 2 + 2 + 2)
 	{
