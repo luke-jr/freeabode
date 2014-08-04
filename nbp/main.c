@@ -13,12 +13,12 @@
 static const int periodic_req_interval = 30;
 
 static void *my_zmq_context, *my_zmq_publisher;
-static struct timespec ts_last_periodic_req;
+static struct timespec ts_next_periodic_req;
 
 static
 void request_periodic(struct nbp_device *nbp, const struct timespec *now)
 {
-	ts_last_periodic_req = *now;
+	timespec_add_ms(now, periodic_req_interval * 1000, &ts_next_periodic_req);
 	nbp_send(nbp, NBPM_REQ_PERIODIC, NULL, 0);
 #ifdef DEBUG_NBP
 	puts("Periodic data request");
@@ -102,17 +102,18 @@ int main(int argc, char **argv)
 	assert(!zmq_bind(my_zmq_ctl, "tcp://*:2930"));
 	assert(!zmq_bind(my_zmq_ctl, "ipc://nbp.ipc"));
 	
-	struct timespec ts_now;
+	struct timespec ts_now, ts_timeout;
 	zmq_pollitem_t pollitems[] = {
 		{ .fd = nbp->_fd, .events = ZMQ_POLLIN },
 		{ .socket = my_zmq_ctl, .events = ZMQ_POLLIN },
 	};
 	while (true)
 	{
+		timespec_clear(&ts_timeout);
 		clock_gettime(CLOCK_MONOTONIC, &ts_now);
-		if (ts_now.tv_sec - periodic_req_interval > ts_last_periodic_req.tv_sec)
+		if (timespec_passed(&ts_next_periodic_req, &ts_now, &ts_timeout))
 			request_periodic(nbp, &ts_now);
-		if (zmq_poll(pollitems, sizeof(pollitems) / sizeof(*pollitems), -1) <= 0)
+		if (zmq_poll(pollitems, sizeof(pollitems) / sizeof(*pollitems), timespec_to_timeout_ms(&ts_now, &ts_timeout)) <= 0)
 			continue;
 		if (pollitems[0].revents & ZMQ_POLLIN)
 			nbp_read(nbp);
