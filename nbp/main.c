@@ -102,6 +102,8 @@ int main(int argc, char **argv)
 	assert(!zmq_bind(my_zmq_ctl, "tcp://*:2930"));
 	assert(!zmq_bind(my_zmq_ctl, "ipc://nbp.ipc"));
 	
+	timespec_clear(&ts_next_periodic_req);
+	
 	struct timespec ts_now, ts_timeout;
 	zmq_pollitem_t pollitems[] = {
 		{ .fd = nbp->_fd, .events = ZMQ_POLLIN },
