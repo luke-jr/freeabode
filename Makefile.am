@@ -2,27 +2,27 @@ lib_LTLIBRARIES = libfreeabode.la
 libfreeabode_la_SOURCES = \
 	security.c \
 	util.c
+nodist_libfreeabode_la_SOURCES = $(builddir)/freeabode.pb-c.c
 libfreeabode_la_CFLAGS = $(LIBSODIUM_CFLAGS) $(LIBZMQ_CFLAGS) $(PROTOBUF_C_CFLAGS)
+libfreeabode_la_CFLAGS += -I$(builddir)
 libfreeabode_la_LDFLAGS = -version-info $(LIBFREEABODE_SO_VERSION) -no-undefined
 libfreeabode_la_LIBADD = $(LIBSODIUM_LIBS) $(LIBZMQ_LIBS) $(PROTOBUF_C_LIBS)
 libfreeabode_includedir = $(includedir)/freeabode
 libfreeabode_include_HEADERS = \
 	bytes.h \
 	security.h \
-	util.h
+	util.h  \
+	$(builddir)/freeabode.pb-c.h
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libfreeabode.pc
 
 bin_PROGRAMS = freeabode
 freeabode_SOURCES = main.c nest.c nest.h bytes.h crc.c crc.h
-freeabode_CFLAGS = $(libfreeabode_la_CFLAGS)
 freeabode_LDADD = -lfreeabode
 
-nodist_freeabode_SOURCES = $(builddir)/freeabode.pb-c.c $(builddir)/freeabode.pb-c.h
 dist_noinst_DATA = freeabode.proto
 MOSTLYCLEANFILES = freeabode.pb-c.c freeabode.pb-c.h
 BUILT_SOURCES = freeabode.pb-c.h
-freeabode_CFLAGS += -I$(builddir)
 
 AM_V_PROTOC_C = $(am__v_PROTOC_C_$(V))
 am__v_PROTOC_C_ = $(am__v_PROTOC_C_$(AM_DEFAULT_VERBOSITY))
