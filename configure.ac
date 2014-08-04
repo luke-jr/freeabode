@@ -10,6 +10,11 @@ AC_PROG_CC_C99
 if test x$ac_cv_prog_cc_c99 = xno; then
 	AC_MSG_ERROR([C99 support is required])
 fi
+m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
+LT_INIT([disable-static])
+
+# http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
+AC_SUBST([LIBFREEABODE_SO_VERSION], [0:0:0])
 
 AC_CHECK_HEADERS([fcntl.h stddef.h stdint.h stdlib.h string.h sys/time.h unistd.h])
 
@@ -38,5 +43,7 @@ AS_IF([test "${PROTOC_C}" == "no"], [AC_MSG_ERROR([ProtoBuf compiler "protoc-c" 
 PKG_CHECK_MODULES([LIBSODIUM], [libsodium])
 PKG_CHECK_MODULES([LIBZMQ], [libzmq])
 
-AC_CONFIG_FILES([Makefile])
+AC_CONFIG_FILES([Makefile
+    libfreeabode.pc:libfreeabode.pc.in
+])
 AC_OUTPUT
