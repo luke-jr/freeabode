@@ -27,3 +27,7 @@ libfreeabode.pc
 ar-lib
 libtool
 .libs
+a.out
+ltmain.sh
+secretkey
+ii
