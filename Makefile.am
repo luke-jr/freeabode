@@ -1,4 +1,6 @@
 lib_LTLIBRARIES = libfreeabode.la
+bin_PROGRAMS = freeabode remctl
+
 libfreeabode_la_SOURCES = \
 	security.c \
 	util.c
@@ -16,9 +18,11 @@ libfreeabode_include_HEADERS = \
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libfreeabode.pc
 
-bin_PROGRAMS = freeabode
-freeabode_SOURCES = main.c nest.c nest.h bytes.h crc.c crc.h
+freeabode_SOURCES = main.c nest.c nest.h crc.c crc.h
 freeabode_LDADD = -lfreeabode
+
+remctl_SOURCES = remctl.c
+remctl_LDADD = -lfreeabode
 
 dist_noinst_DATA = freeabode.proto
 MOSTLYCLEANFILES = freeabode.pb-c.c freeabode.pb-c.h
