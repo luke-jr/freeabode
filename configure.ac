@@ -49,5 +49,6 @@ AC_CONFIG_FILES([
 	libfreeabode/Makefile
 	libfreeabode/libfreeabode.pc:libfreeabode/libfreeabode.pc.in
 	nbp/Makefile
+	tstat/Makefile
 ])
 AC_OUTPUT

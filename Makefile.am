@@ -1,4 +1,5 @@
 SUBDIRS = \
 	libfreeabode \
 	fabd-cli \
-	nbp
+	nbp \
+	tstat

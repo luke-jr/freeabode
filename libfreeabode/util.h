@@ -2,6 +2,7 @@
 #define FABD_UTIL_H
 
 #include <stdbool.h>
+#include <stdio.h>
 #include <time.h>
 #include <sys/types.h>
 
@@ -13,6 +14,8 @@ enum fabd_tristate {
 
 extern void bin2hex(char *, const void *, size_t);
 extern bool hex2bin(unsigned char *, const char *, size_t);
+
+#define TIMESPEC_INIT_CLEAR  { .tv_sec = (time_t)-1 }
 
 static inline
 int timespec_cmp(const struct timespec *a, const struct timespec *b)
@@ -98,6 +101,15 @@ long timespec_to_timeout_ms(const struct timespec *now, const struct timespec *t
 	timespec_sub(timeout, now, &timeleft);
 	return ((long)timeleft.tv_sec * 1000) + (timeleft.tv_nsec / 1000000);
 }
+static inline
+int timespec_to_str(char * const s, const size_t sz, const struct timespec * const ts)
+{
+	if (timespec_isset(ts))
+		return snprintf(s, sz, "%lu.%09ld", ts->tv_sec, ts->tv_nsec);
+	else
+		return snprintf(s, sz, "(unset)");
+}
+
 
 #define zmq_send_protobuf(s, type, data, flags)  do{  \
 	size_t _pbsz = type ## __get_packed_size(data);  \
