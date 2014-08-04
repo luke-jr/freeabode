@@ -12,9 +12,9 @@
 
 int main(int argc, char **argv)
 {
-	if (argc != 3)
+	if (argc < 3 || argc > 4)
 	{
-		printf("Usage: %s <wire> <1/0>\n", argv[0]);
+		printf("Usage: %s <wire> <1/0> [uri]\n", argv[0]);
 		exit(1);
 	}
 	const ProtobufCEnumValue *enumdes = protobuf_c_enum_descriptor_get_value_by_name(&pb_hvacwires__descriptor, argv[1]);
@@ -38,7 +38,7 @@ int main(int argc, char **argv)
 	
 	freeabode_zmq_security(ctl, false);
 	
-	assert(!zmq_connect(ctl, "tcp://192.168.77.104:2930"));
+	assert(!zmq_connect(ctl, argv[3] ?: "ipc://nbp.ipc"));
 	
 	PbRequest req = PB_REQUEST__INIT;
 	req.n_sethvacwire = 1;
