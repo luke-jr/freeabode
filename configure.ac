@@ -1,7 +1,7 @@
 AC_PREREQ([2.69])
 AC_INIT([freeabode], [0.0.1], [luke+freeabode@dashjr.org])
 AM_INIT_AUTOMAKE([foreign])
-AC_CONFIG_SRCDIR([nest.c])
+AC_CONFIG_SRCDIR([libfreeabode/libfreeabode.pc.in])
 AC_CONFIG_HEADERS([config.h])
 
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
@@ -43,7 +43,11 @@ AS_IF([test "${PROTOC_C}" == "no"], [AC_MSG_ERROR([ProtoBuf compiler "protoc-c" 
 PKG_CHECK_MODULES([LIBSODIUM], [libsodium])
 PKG_CHECK_MODULES([LIBZMQ], [libzmq])
 
-AC_CONFIG_FILES([Makefile
-    libfreeabode.pc:libfreeabode.pc.in
+AC_CONFIG_FILES([
+	Makefile
+	fabd-cli/Makefile
+	libfreeabode/Makefile
+	libfreeabode/libfreeabode.pc:libfreeabode/libfreeabode.pc.in
+	nbp/Makefile
 ])
 AC_OUTPUT

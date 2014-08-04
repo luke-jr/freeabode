@@ -6,9 +6,9 @@
 
 #include <zmq.h>
 
-#include "freeabode.pb-c.h"
-#include "security.h"
-#include "util.h"
+#include <freeabode/freeabode.pb-c.h>
+#include <freeabode/security.h>
+#include <freeabode/util.h>
 
 int main(int argc, char **argv)
 {

@@ -5,10 +5,10 @@
 
 #include <zmq.h>
 
+#include <freeabode/freeabode.pb-c.h>
+#include <freeabode/security.h>
+#include <freeabode/util.h>
 #include "nest.h"
-#include "freeabode.pb-c.h"
-#include "security.h"
-#include "util.h"
 
 static const int periodic_req_interval = 30;
 

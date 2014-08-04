@@ -3,8 +3,8 @@
 
 #include <time.h>
 
-#include "bytes.h"
-#include "util.h"
+#include <freeabode/bytes.h>
+#include <freeabode/util.h>
 
 enum nbp_fet {
 	NBPF_W1   =   0,
