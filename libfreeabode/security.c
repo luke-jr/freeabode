@@ -100,7 +100,7 @@ void freeabode_zmq_security(void * const socket, const bool server)
 static
 void zap_handler(void *handler)
 {
-	static const char my_zap_ver[3] = "1.0";
+	static const char my_zap_ver[] = "1.0";
 	char buf[0x100], reqid[0x100];
 	int sz, reqidsz;
 	bool problem;
@@ -143,7 +143,7 @@ void zap_handler(void *handler)
 				problem = true;
 		}
 		
-		zmq_send(handler, my_zap_ver, sizeof(my_zap_ver), ZMQ_SNDMORE);
+		zmq_send(handler, my_zap_ver, sizeof(my_zap_ver)-1, ZMQ_SNDMORE);
 		zmq_send(handler, reqid, reqidsz, ZMQ_SNDMORE);
 		zmq_send(handler, problem ? "400" : "200", 3, ZMQ_SNDMORE);
 		zmq_send(handler, NULL, 0, ZMQ_SNDMORE);
