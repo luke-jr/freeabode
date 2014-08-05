@@ -148,6 +148,7 @@ void handle_req(struct tstat_data *tstat)
 	zmq_recv_protobuf(tstat->server_ctl, pb_request, req, NULL);
 	PbRequestReply reply = PB_REQUEST_REPLY__INIT;
 	PbHVACGoals goalreply = PB_HVACGOALS__INIT;
+	PbEvent pbevent = PB_EVENT__INIT;
 	
 	if (req->hvacgoals)
 	{
@@ -162,11 +163,12 @@ void handle_req(struct tstat_data *tstat)
 		goalreply.temp_hysteresis = tstat->t_hysteresis;
 		
 		reply.hvacgoals = &goalreply;
+		pbevent.hvacgoals = &goalreply;
 	}
 	
 	pb_request__free_unpacked(req, NULL);
 	zmq_send_protobuf(tstat->server_ctl, pb_request_reply, &reply, 0);
-	free(reply.sethvacwiresuccess);
+	zmq_send_protobuf(tstat->server_events, pb_event, &pbevent, 0);
 }
 
 int main(int argc, char **argv)
