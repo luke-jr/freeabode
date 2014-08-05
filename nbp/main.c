@@ -59,12 +59,14 @@ void msg_weather(struct nbp_device *nbp, const struct timespec *now, uint16_t te
 	int32_t fahrenheit = ((int32_t)temperature) * 90 / 5 + 32000;
 	printf("Temperature %3d.%02d C (%4d.%03d F)    Humidity: %d.%d%%\n", temperature / 100, temperature % 100, fahrenheit / 1000, fahrenheit % 1000, humidity / 10, humidity % 10);
 	
+	PbEvent pbe = PB_EVENT__INIT;
 	PbWeather pb = PB_WEATHER__INIT;
 	pb.has_temperature = true;
 	pb.temperature = temperature;
 	pb.has_humidity = true;
 	pb.humidity = humidity;
-	zmq_send_protobuf(my_zmq_publisher, pb_weather, &pb, 0);
+	pbe.weather = &pb;
+	zmq_send_protobuf(my_zmq_publisher, pb_event, &pbe, 0);
 }
 
 void handle_req(void * const s, struct nbp_device * const nbp)

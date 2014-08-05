@@ -76,10 +76,11 @@ bool hvac_control_wire(void *ctl, PbHVACWires wire, bool connect)
 static
 void read_weather(struct tstat_data *tstat, struct timespec *ts_now)
 {
-	PbWeather *weather;
-	zmq_recv_protobuf(tstat->client_weather, pb_weather, weather, NULL);
+	PbEvent *pbevent;
+	zmq_recv_protobuf(tstat->client_weather, pb_event, pbevent, NULL);
+	PbWeather *weather = pbevent->weather;
 	
-	if (weather->has_temperature)
+	if (weather && weather->has_temperature)
 	{
 		applog(ts_now, "Temperature %2u.%02u C", (unsigned)(weather->temperature / 100), (unsigned)(weather->temperature % 100));
 		if (tstat->cooling)
@@ -138,7 +139,7 @@ void read_weather(struct tstat_data *tstat, struct timespec *ts_now)
 		}
 	}
 	
-	pb_weather__free_unpacked(weather, NULL);
+	pb_event__free_unpacked(pbevent, NULL);
 }
 
 void handle_req(struct tstat_data *tstat)

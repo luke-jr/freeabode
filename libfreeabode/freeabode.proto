@@ -13,6 +13,10 @@ message PbWeather {
 	optional int32 humidity = 2;
 }
 
+message PbEvent {
+	optional PbWeather weather = 1;
+}
+
 message PbSetHVACWireRequest {
 	required PbHVACWires wire = 1;
 	required bool connect = 2;
