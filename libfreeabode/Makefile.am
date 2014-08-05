@@ -21,6 +21,14 @@ dist_noinst_DATA = freeabode.proto
 MOSTLYCLEANFILES = freeabode.pb-c.c freeabode.pb-c.h
 BUILT_SOURCES = freeabode.pb-c.h
 
+if HAVE_JANSSON
+libfreeabode_la_SOURCES += json.c
+libfreeabode_include_HEADERS += json.h
+libfreeabode_la_CFLAGS += $(JANSSON_CFLAGS)
+libfreeabode_la_LIBADD += $(JANSSON_LIBS)
+endif
+
+
 AM_V_PROTOC_C = $(am__v_PROTOC_C_$(V))
 am__v_PROTOC_C_ = $(am__v_PROTOC_C_$(AM_DEFAULT_VERBOSITY))
 am__v_PROTOC_C_0 = @echo "  PROTOC_C" $*.pb-c.c $*.pb-c.h;
