@@ -267,7 +267,7 @@ int main(int argc, char **argv)
 			}
 		}
 		{
-			char buf[3][0x100];
+			char buf[4][0x100];
 			timespec_to_str(buf[0], sizeof(buf[0]), &tstat->ts_earliest_cool);
 			timespec_to_str(buf[1], sizeof(buf[1]), &tstat->ts_turn_fan_on);
 			timespec_to_str(buf[2], sizeof(buf[2]), &tstat->ts_turn_compressor_on);
