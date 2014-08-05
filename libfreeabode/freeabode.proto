@@ -20,6 +20,7 @@ message PbSetHVACWireRequest {
 
 message PbHVACGoals {
 	optional int32 temp_high = 1;
+	optional int32 temp_hysteresis = 2;
 }
 
 message PbRequest {

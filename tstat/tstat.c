@@ -13,11 +13,11 @@
 #include <freeabode/util.h>
 
 static const int default_temp_goal_high = 3020;
+static const int default_temp_hysteresis = 50;
 static const unsigned long fan_before_cool_ms =  10547;
 static const unsigned long  fan_after_cool_ms =  42188;
 static const unsigned long   shutoff_delay_ms = 337500;
 static const unsigned long           retry_ms =   1319;
-static const int temp_hysteresis = 10;
 
 struct tstat_data {
 	// ZMQ sockets
@@ -28,6 +28,7 @@ struct tstat_data {
 	
 	// Configuration
 	int t_goal_high;
+	int t_hysteresis;
 	
 	// State
 	bool cooling;
@@ -83,7 +84,7 @@ void read_weather(struct tstat_data *tstat, struct timespec *ts_now)
 		applog(ts_now, "Temperature %2u.%02u C", (unsigned)(weather->temperature / 100), (unsigned)(weather->temperature % 100));
 		if (tstat->cooling)
 		{
-			if (weather->temperature < tstat->t_goal_high - temp_hysteresis)
+			if (weather->temperature < tstat->t_goal_high - tstat->t_hysteresis)
 			{
 				applog(ts_now, "No cool needed");
 				if (timespec_isset(&tstat->ts_turn_fan_on))
@@ -121,7 +122,7 @@ void read_weather(struct tstat_data *tstat, struct timespec *ts_now)
 		}
 		else
 		{
-			if (weather->temperature > tstat->t_goal_high + temp_hysteresis)
+			if (weather->temperature > tstat->t_goal_high + tstat->t_hysteresis)
 			{
 				applog(ts_now, "Preparing to cool");
 				tstat->cooling = true;
@@ -153,6 +154,12 @@ void handle_req(struct tstat_data *tstat)
 			tstat->t_goal_high = req->hvacgoals->temp_high;
 		goalreply.has_temp_high = true;
 		goalreply.temp_high = tstat->t_goal_high;
+		
+		if (req->hvacgoals->has_temp_hysteresis)
+			tstat->t_hysteresis = req->hvacgoals->temp_hysteresis;
+		goalreply.has_temp_hysteresis = true;
+		goalreply.temp_hysteresis = tstat->t_hysteresis;
+		
 		reply.hvacgoals = &goalreply;
 	}
 	
@@ -176,6 +183,7 @@ int main(int argc, char **argv)
 	struct timespec ts_now, ts_timeout;
 	struct tstat_data _tstat = {
 		.t_goal_high = default_temp_goal_high,
+		.t_hysteresis = default_temp_hysteresis,
 		.ts_turn_fan_on = TIMESPEC_INIT_CLEAR,
 		.ts_turn_compressor_on = TIMESPEC_INIT_CLEAR,
 		.ts_turn_fan_off = TIMESPEC_INIT_CLEAR,
