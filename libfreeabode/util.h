@@ -6,6 +6,8 @@
 #include <time.h>
 #include <sys/types.h>
 
+#define ullabs(n)  (((n) < 0) ? (ULLONG_MAX - (unsigned long long)(n) + 1) : (unsigned long long)(n))
+
 enum fabd_tristate {
 	FTS_FALSE = (int)false,
 	FTS_TRUE  = (int)true,
