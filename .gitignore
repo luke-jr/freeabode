@@ -30,4 +30,9 @@ libtool
 a.out
 ltmain.sh
 secretkey
-ii
+ii*
+vgcore*
+core*
+*.orig
+*.rej
+?
