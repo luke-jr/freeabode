@@ -6,6 +6,8 @@ enum PbHVACWires {
 	W2 = 4;
 	Y2 = 7;
 	Star = 0xb;
+	
+	_COUNT = 0xc;
 }
 
 message PbWeather {
@@ -15,6 +17,7 @@ message PbWeather {
 
 message PbEvent {
 	optional PbWeather weather = 1;
+	optional PbSetHVACWireRequest wire_change = 2;
 }
 
 message PbSetHVACWireRequest {
