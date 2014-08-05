@@ -1,6 +1,7 @@
 nbp/freeabode
 remctl
 fabd-cli/fabd-cli
+tstat/tstat
 *~
 *.o
 *.lo
