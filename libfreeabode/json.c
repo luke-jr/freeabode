@@ -510,6 +510,7 @@ json_t *p2j_elem(void ** const addr_p, const ProtobufCFieldDescriptor * const pb
 			*addr_p += 1;
 			protobuf_c_boolean *p = addr;
 			j = (*p) ? json_true() : json_false();
+			break;
 		}
 		case PROTOBUF_C_TYPE_ENUM:
 		{
@@ -520,6 +521,7 @@ json_t *p2j_elem(void ** const addr_p, const ProtobufCFieldDescriptor * const pb
 				j = json_string(enumv->name);
 			else
 				j = json_integer(*p);
+			break;
 		}
 		case PROTOBUF_C_TYPE_STRING:
 		{
@@ -528,6 +530,7 @@ json_t *p2j_elem(void ** const addr_p, const ProtobufCFieldDescriptor * const pb
 			if (!*p)
 				return NULL;
 			j = json_string(*p);
+			break;
 		}
 		case PROTOBUF_C_TYPE_BYTES:
 		{
@@ -536,6 +539,7 @@ json_t *p2j_elem(void ** const addr_p, const ProtobufCFieldDescriptor * const pb
 			char hex[(p->len * 2) + 1];
 			bin2hex(hex, p->data, p->len);
 			j = json_string(hex);
+			break;
 		}
 		case PROTOBUF_C_TYPE_MESSAGE:
 		{
@@ -547,6 +551,7 @@ json_t *p2j_elem(void ** const addr_p, const ProtobufCFieldDescriptor * const pb
 			if (!j)
 				// Will be incremented twice, from protobuf_to_json and again at return
 				--*errcount;
+			break;
 		}
 	}
 	if (!j)
@@ -577,7 +582,7 @@ json_t *protobuf_to_json(void * const _pb, int * const errcount)
 			if (!*p)
 				continue;
 			
-			json_t *jitem = json_array();
+			jitem = json_array();
 			if (!jitem)
 			{
 				++*errcount;
