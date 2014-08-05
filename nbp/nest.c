@@ -7,6 +7,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <termios.h>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -23,9 +24,25 @@ struct nbp_device *nbp_open(const char * const path)
 	int fd = fileno(stdin);
 #else
 	int fd = open("/dev/ttyO2", O_RDWR | O_NOCTTY);
-#endif
 	if (fd < 0)
 		return NULL;
+	
+	struct termios tios;
+	tcgetattr(fd, &tios);
+	speed_t speed = B115200;
+	cfsetispeed(&tios, speed);
+	cfsetospeed(&tios, speed);
+	
+	tios.c_cflag &= ~(CSIZE | PARENB);
+	tios.c_cflag |= CS8 | CREAD | CLOCAL;
+	tios.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
+	tios.c_oflag &= ~OPOST;
+	tios.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+	
+	tcsetattr(fd, TCSANOW, &tios);
+	
+	tcflush(fd, TCIOFLUSH);
+#endif
 	
 	struct timespec ts_now;
 	clock_gettime(CLOCK_MONOTONIC, &ts_now);
