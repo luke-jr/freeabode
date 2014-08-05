@@ -145,8 +145,16 @@ void handle_req(struct tstat_data *tstat)
 	PbRequest *req;
 	zmq_recv_protobuf(tstat->server_ctl, pb_request, req, NULL);
 	PbRequestReply reply = PB_REQUEST_REPLY__INIT;
+	PbHVACGoals goalreply = PB_HVACGOALS__INIT;
 	
-	// TODO
+	if (req->hvacgoals)
+	{
+		if (req->hvacgoals->has_temp_high)
+			tstat->t_goal_high = req->hvacgoals->temp_high;
+		goalreply.has_temp_high = true;
+		goalreply.temp_high = tstat->t_goal_high;
+		reply.hvacgoals = &goalreply;
+	}
 	
 	pb_request__free_unpacked(req, NULL);
 	zmq_send_protobuf(tstat->server_ctl, pb_request_reply, &reply, 0);

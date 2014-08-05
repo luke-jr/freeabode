@@ -18,10 +18,16 @@ message PbSetHVACWireRequest {
 	required bool connect = 2;
 }
 
+message PbHVACGoals {
+	optional int32 temp_high = 1;
+}
+
 message PbRequest {
 	repeated PbSetHVACWireRequest SetHVACWire = 1;
+	optional PbHVACGoals HVACGoals = 100;
 }
 
 message PbRequestReply {
 	repeated bool SetHVACWireSuccess = 1;
+	optional PbHVACGoals HVACGoals = 100;
 }
