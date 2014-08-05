@@ -15,6 +15,8 @@ enum fabd_tristate {
 extern void bin2hex(char *, const void *, size_t);
 extern bool hex2bin(unsigned char *, const char *, size_t);
 
+extern bool fabd_strtobool(const char *, char **endptr);
+
 #define TIMESPEC_INIT_CLEAR  { .tv_sec = (time_t)-1 }
 
 static inline

@@ -1,6 +1,9 @@
 #include "config.h"
 
 #include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
 #include <sys/types.h>
 
 static const char _hexchars[0x10] = "0123456789abcdef";
@@ -48,4 +51,49 @@ badchar:
 	}
 	
 	return !hexstr[0];
+}
+
+bool fabd_strtobool(const char * const s, char ** const endptr)
+{
+	static const struct {
+		bool val;
+		const char *keyword;
+	} keywords[] = {
+		{false, "false"},
+		{false, "never"},
+		{false, "none"},
+		{false, "off"},
+		{false, "no"},
+		{false, "0"},
+		
+		{true , "always"},
+		{true , "true"},
+		{true , "yes"},
+		{true , "on"},
+	};
+	
+	const int total_keywords = sizeof(keywords) / sizeof(*keywords);
+	for (int i = 0; i < total_keywords; ++i)
+	{
+		const size_t kwlen = strlen(keywords[i].keyword);
+		if (!strncasecmp(keywords[i].keyword, s, kwlen))
+		{
+			if (endptr)
+				*endptr = (char*)&s[kwlen];
+			return keywords[i].val;
+		}
+	}
+	
+	char *lend;
+	strtol(s, &lend, 0);
+	if (lend > s)
+	{
+		if (endptr)
+			*endptr = lend;
+		// Any number other than "0" is intentionally considered true, including 0x0
+		return true;
+	}
+	
+	*endptr = (char*)s;
+	return false;
 }
