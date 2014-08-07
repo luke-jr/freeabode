@@ -142,6 +142,16 @@ void read_weather(struct tstat_data *tstat, struct timespec *ts_now)
 	pb_event__free_unpacked(pbevent, NULL);
 }
 
+static
+void populate_hvacgoals(PbHVACGoals * const goals, const struct tstat_data * const tstat)
+{
+	goals->has_temp_high = true;
+	goals->temp_high = tstat->t_goal_high;
+	
+	goals->has_temp_hysteresis = true;
+	goals->temp_hysteresis = tstat->t_hysteresis;
+}
+
 void handle_req(struct tstat_data *tstat)
 {
 	PbRequest *req;
@@ -154,14 +164,11 @@ void handle_req(struct tstat_data *tstat)
 	{
 		if (req->hvacgoals->has_temp_high)
 			tstat->t_goal_high = req->hvacgoals->temp_high;
-		goalreply.has_temp_high = true;
-		goalreply.temp_high = tstat->t_goal_high;
 		
 		if (req->hvacgoals->has_temp_hysteresis)
 			tstat->t_hysteresis = req->hvacgoals->temp_hysteresis;
-		goalreply.has_temp_hysteresis = true;
-		goalreply.temp_hysteresis = tstat->t_hysteresis;
 		
+		populate_hvacgoals(&goalreply, tstat);
 		reply.hvacgoals = &goalreply;
 		pbevent.hvacgoals = &goalreply;
 	}
@@ -169,6 +176,29 @@ void handle_req(struct tstat_data *tstat)
 	pb_request__free_unpacked(req, NULL);
 	zmq_send_protobuf(tstat->server_ctl, pb_request_reply, &reply, 0);
 	zmq_send_protobuf(tstat->server_events, pb_event, &pbevent, 0);
+}
+
+void got_new_subscriber(void * const s, const struct tstat_data * const tstat)
+{
+	zmq_msg_t msg;
+	assert(!zmq_msg_init(&msg));
+	assert(zmq_msg_recv(&msg, s, 0) >= 0);
+	if (zmq_msg_size(&msg) < 1)
+		goto out;
+	
+	uint8_t * const data = zmq_msg_data(&msg);
+	if (!data[0])
+		goto out;
+	
+	PbEvent pbevent = PB_EVENT__INIT;
+	PbHVACGoals goalreply = PB_HVACGOALS__INIT;
+	populate_hvacgoals(&goalreply, tstat);
+	pbevent.hvacgoals = &goalreply;
+	
+	zmq_send_protobuf(s, pb_event, &pbevent, 0);
+	
+out:
+	zmq_msg_close(&msg);
 }
 
 int main(int argc, char **argv)
@@ -209,8 +239,9 @@ int main(int argc, char **argv)
 	assert(!zmq_connect(tstat->client_weather, myopt(2, "ipc://weather.ipc")));
 	assert(!zmq_setsockopt(tstat->client_weather, ZMQ_SUBSCRIBE, NULL, 0));
 	
-	tstat->server_events = zmq_socket(my_zmq_context, ZMQ_PUB);
+	tstat->server_events = zmq_socket(my_zmq_context, ZMQ_XPUB);
 	freeabode_zmq_security(tstat->server_events, true);
+	zmq_setsockopt(tstat->server_events, ZMQ_XPUB_VERBOSE, &int_one, sizeof(int_one));
 	assert(!zmq_bind(tstat->server_events, "tcp://*:2931"));
 	assert(!zmq_bind(tstat->server_events, "ipc://tstat-events.ipc"));
 	
@@ -222,6 +253,7 @@ int main(int argc, char **argv)
 	zmq_pollitem_t pollitems[] = {
 		{ .socket = tstat->client_weather, .events = ZMQ_POLLIN },
 		{ .socket = tstat->server_ctl, .events = ZMQ_POLLIN },
+		{ .socket = tstat->server_events, .events = ZMQ_POLLIN },
 	};
 	while (true)
 	{
@@ -284,5 +316,7 @@ int main(int argc, char **argv)
 			read_weather(tstat, &ts_now);
 		if (pollitems[1].revents & ZMQ_POLLIN)
 			handle_req(tstat);
+		if (pollitems[2].revents & ZMQ_POLLIN)
+			got_new_subscriber(tstat->server_events, tstat);
 	}
 }
