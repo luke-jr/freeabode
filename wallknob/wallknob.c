@@ -10,6 +10,7 @@
 #include <freeabode/security.h>
 #include <freeabode/util.h>
 
+#define ADJUSTMENT_DELAY_SECS  1, 318
 #define FONT_NAME  "DroidSansMono.ttf"
 
 static IDirectFB *dfb;
@@ -82,7 +83,6 @@ void weather_thread(void * const userp)
 			fetstatus[pbevent->wire_change[i]->wire] = pbevent->wire_change[i]->connect;
 		
 		snprintf(buf, sizeof(buf), "%2u %c%c%c", (unsigned)(fahrenheit / 1000), fetstatus[PB_HVACWIRES__Y1] ? 'Y' : ' ', fetstatus[PB_HVACWIRES__G] ? 'G' : ' ', fetstatus[PB_HVACWIRES__OB] ? 'O' : ' ');
-		puts(buf);
 		
 		dfbassert(surface->Clear(surface, 0, 0xff, 0, 0x1f));
 		dfbassert(surface->SetColor(surface, 0x80, 0xff, 0x20, 0xff));
@@ -90,6 +90,20 @@ void weather_thread(void * const userp)
 		dfbassert(surface->DrawString(surface, buf, -1, width, font_h2.height, DSTF_RIGHT));
 		dfbassert(surface->Flip(surface, NULL, DSFLIP_BLIT));
 	}
+}
+
+static int current_goal;
+static bool adjusting;
+static int adjusted_goal;
+static int adjusting_pipe[2];
+static void *client_tstat_ctl;
+
+static
+void init_client_tstat_ctl()
+{
+	client_tstat_ctl = zmq_socket(my_zmq_context, ZMQ_REQ);
+	freeabode_zmq_security(client_tstat_ctl, false);
+	assert(!zmq_connect(client_tstat_ctl, "tcp://192.168.77.104:2932"));
 }
 
 static
@@ -112,31 +126,110 @@ void goal_thread(void * const userp)
 	dfbassert(surface->Flip(surface, NULL, DSFLIP_BLIT));
 	dfbassert(window->SetOpacity(window, 0xff));
 	
+	zmq_pollitem_t pollitems[] = {
+		{ .socket = client_tstat, .events = ZMQ_POLLIN },
+		{ .fd = adjusting_pipe[0], .events = ZMQ_POLLIN },
+	};
+	
 	char buf[0x10];
 	while (true)
 	{
-		PbEvent *pbevent;
-		zmq_recv_protobuf(client_tstat, pb_event, pbevent, NULL);
-		
-		PbHVACGoals *goals = pbevent->hvacgoals;
-		if (!(goals && goals->has_temp_high))
+		if (zmq_poll(pollitems, sizeof(pollitems) / sizeof(*pollitems), -1) <= 0)
 			continue;
-		int fahrenheit = decicelcius_to_millifahrenheit(goals->temp_high);
 		
-		snprintf(buf, sizeof(buf), "%2u", (unsigned)(fahrenheit / 1000));
+		if (pollitems[0].revents & ZMQ_POLLIN)
+		{
+			PbEvent *pbevent;
+			zmq_recv_protobuf(client_tstat, pb_event, pbevent, NULL);
+			
+			PbHVACGoals *goals = pbevent->hvacgoals;
+			if (goals && goals->has_temp_high)
+			{
+				current_goal = goals->temp_high;
+				if (!client_tstat_ctl)
+					init_client_tstat_ctl();
+			}
+		}
+		if (pollitems[1].revents & ZMQ_POLLIN)
+			read(adjusting_pipe[0], buf, sizeof(buf));
+		
+		int fahrenheit_current  = decicelcius_to_millifahrenheit(current_goal ) / 1000;
+		int fahrenheit_adjusted;
+		if (adjusting)
+			fahrenheit_adjusted = decicelcius_to_millifahrenheit(adjusted_goal) / 1000;
+		else
+			fahrenheit_adjusted = fahrenheit_current;
+		
+		snprintf(buf, sizeof(buf), "%2u", (unsigned)(fahrenheit_adjusted));
 		
 		dfbassert(surface->Clear(surface, 0, 0, 0xff, 0x1f));
-		dfbassert(surface->SetColor(surface, 0x80, 0xff, 0x20, 0xff));
+		if (fahrenheit_adjusted == fahrenheit_current)
+			dfbassert(surface->SetColor(surface, 0x80, 0xff, 0x20, 0xff));
+		else
+			dfbassert(surface->SetColor(surface, 0xff, 0x80, 0x20, 0xff));
 		dfbassert(surface->SetFont(surface, font_h4.dfbfont));
 		dfbassert(surface->DrawString(surface, buf, -1, width, font_h4.height, DSTF_RIGHT));
 		dfbassert(surface->Flip(surface, NULL, DSFLIP_BLIT));
 	}
 }
 
+// right is negative, left is positive
+static
+void handle_knob_turn(const int axisrel)
+{
+	if (!client_tstat_ctl)
+		return;
+	if (!adjusting)
+	{
+		adjusting = true;
+		adjusted_goal = current_goal;
+	}
+	adjusted_goal -= axisrel;
+	write(adjusting_pipe[1], "", 1);
+}
+
+static
+void make_adjustments()
+{
+	{
+		PbRequest req = PB_REQUEST__INIT;
+		PbHVACGoals goals = PB_HVACGOALS__INIT;
+		goals.has_temp_high = true;
+		goals.temp_high = adjusted_goal;
+		req.hvacgoals = &goals;
+		zmq_send_protobuf(client_tstat_ctl, pb_request, &req, 0);
+	}
+	
+	{
+		PbRequestReply *reply;
+		zmq_recv_protobuf(client_tstat_ctl, pb_request_reply, reply, NULL);
+		bool success = false;
+		if (reply->hvacgoals && reply->hvacgoals->has_temp_high)
+		{
+			current_goal = reply->hvacgoals->temp_high;
+			success = (reply->hvacgoals->temp_high == adjusted_goal);
+				success = true;
+		}
+		pb_request_reply__free_unpacked(reply, NULL);
+		if (!success)
+			return;
+	}
+	
+	adjusting = false;
+	write(adjusting_pipe[1], "", 1);
+}
+
+static
+void handle_button_press()
+{
+	// TODO
+}
+
 int main(int argc, char **argv)
 {
 	load_freeabode_key();
 	my_zmq_context = zmq_ctx_new();
+	assert(!pipe(adjusting_pipe));
 	
 	IDirectFBDisplayLayer *layer;
 	
@@ -183,7 +276,69 @@ int main(int argc, char **argv)
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		zmq_threadstart(goal_thread, window);
 	}
-	// TODO: handle input
+	
+	// Main thread now handles input
+	IDirectFBEventBuffer *evbuf;
+	DFBEvent ev;
+	dfbassert(dfb->CreateInputEventBuffer(dfb, DICAPS_ALL, DFB_TRUE, &evbuf));
 	while (true)
-		sleep(1);
+	{
+		{
+			DFBResult res;
+			if (adjusting)
+			{
+				res = evbuf->WaitForEventWithTimeout(evbuf, ADJUSTMENT_DELAY_SECS);
+				if (res == DFB_TIMEOUT)
+				{
+					// Timeout occurred
+					make_adjustments();
+					continue;
+				}
+			}
+			else
+				res = evbuf->WaitForEvent(evbuf);
+			if (res == DFB_INTERRUPTED)
+				// Shouldn't happen, but does :(
+				continue;
+			dfbassert(res);
+		}
+		dfbassert(evbuf->GetEvent(evbuf, &ev));
+		if (ev.clazz != DFEC_INPUT)
+			continue;
+		
+		switch (ev.input.type)
+		{
+			case DIET_AXISMOTION:
+				// Knob
+				if (!(ev.input.flags & DIEF_AXISREL))
+					break;
+				
+				handle_knob_turn(ev.input.axisrel);
+				
+				break;
+			case DIET_KEYPRESS:
+			case DIET_KEYRELEASE:
+				if (ev.input.flags & DIEF_KEYID)
+				{
+					// Simulate knob turn for left/right arrow keys
+					if (ev.input.key_id == DIKI_LEFT)
+					{
+						handle_knob_turn(4);
+						break;
+					}
+					else
+					if (ev.input.key_id == DIKI_RIGHT)
+					{
+						handle_knob_turn(-4);
+						break;
+					}
+				}
+				
+				handle_button_press();
+				
+				break;
+			default:
+				break;
+		}
+	}
 }
