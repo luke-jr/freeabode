@@ -17,7 +17,7 @@ message PbWeather {
 
 message PbEvent {
 	optional PbWeather weather = 1;
-	optional PbSetHVACWireRequest wire_change = 2;
+	repeated PbSetHVACWireRequest wire_change = 2;
 	optional PbHVACGoals HVACGoals = 100;
 }
 

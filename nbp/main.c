@@ -79,8 +79,11 @@ bool my_nbp_control_fet(struct nbp_device * const nbp, const enum nbp_fet fet, c
 	PbSetHVACWireRequest pbwire = PB_SET_HVACWIRE_REQUEST__INIT;
 	pbwire.wire = fet;
 	pbwire.connect = connect;
-	pbevent.wire_change = &pbwire;
+	pbevent.wire_change = malloc(sizeof(*pbevent.wire_change));
+	pbevent.n_wire_change = 1;
+	*pbevent.wire_change = &pbwire;
 	zmq_send_protobuf(my_zmq_publisher, pb_event, &pbevent, 0);
+	free(pbevent.wire_change);
 	
 	return true;
 }

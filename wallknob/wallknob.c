@@ -77,8 +77,9 @@ void weather_thread(void * const userp)
 		PbWeather *weather = pbevent->weather;
 		if (weather && weather->has_temperature)
 			fahrenheit = decicelcius_to_millifahrenheit(weather->temperature);
-		if (pbevent->wire_change && pbevent->wire_change->wire < PB_HVACWIRES___COUNT && pbevent->wire_change->wire > 0)
-			fetstatus[pbevent->wire_change->wire] = pbevent->wire_change->connect;
+		for (int i = 0; i < pbevent->n_wire_change; ++i)
+			if (pbevent->wire_change[i]->wire < PB_HVACWIRES___COUNT && pbevent->wire_change[i]->wire > 0)
+			fetstatus[pbevent->wire_change[i]->wire] = pbevent->wire_change[i]->connect;
 		
 		snprintf(buf, sizeof(buf), "%2u %c%c%c", (unsigned)(fahrenheit / 1000), fetstatus[PB_HVACWIRES__Y1] ? 'Y' : ' ', fetstatus[PB_HVACWIRES__G] ? 'G' : ' ', fetstatus[PB_HVACWIRES__OB] ? 'O' : ' ');
 		puts(buf);
