@@ -40,6 +40,24 @@ AC_ARG_WITH([protoc-c],
 )
 AS_IF([test "${PROTOC_C}" == "no"], [AC_MSG_ERROR([ProtoBuf compiler "protoc-c" not found.])])
 
+have_directfb=true
+AC_ARG_WITH([directfb],
+	[AC_HELP_STRING([--without-directfb],[Build without DirectFB support (default enabled)])],
+	[
+		if test x$withval = xyes; then
+			PKG_CHECK_MODULES([DIRECTFB], [directfb])
+		else
+			have_directfb=false
+		fi
+	],
+	[
+		PKG_CHECK_MODULES([DIRECTFB], [directfb],[],[
+			have_directfb=false
+		])
+	]
+)
+AM_CONDITIONAL([HAVE_DIRECTFB], [$have_directfb])
+
 have_jansson=true
 AC_ARG_WITH([jansson],
 	[AC_HELP_STRING([--without-jansson],[Build without JSON support via libjansson (default enabled)])],
@@ -68,5 +86,6 @@ AC_CONFIG_FILES([
 	libfreeabode/libfreeabode.pc:libfreeabode/libfreeabode.pc.in
 	nbp/Makefile
 	tstat/Makefile
+	wallknob/Makefile
 ])
 AC_OUTPUT

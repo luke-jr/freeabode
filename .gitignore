@@ -2,6 +2,7 @@ nbp/freeabode
 remctl
 fabd-cli/fabd-cli
 tstat/tstat
+wallknob/wallknob
 *~
 *.o
 *.lo

@@ -2,4 +2,5 @@ SUBDIRS = \
 	libfreeabode \
 	fabd-cli \
 	nbp \
-	tstat
+	tstat \
+	wallknob
