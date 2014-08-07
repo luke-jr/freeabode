@@ -64,6 +64,12 @@ enum fabd_tristate nbp_get_fet_presence(struct nbp_device *nbp, enum nbp_fet fet
 	return (fet >= NBPF__COUNT) ? FTS_UNKNOWN : nbp->_fet[fet]._present;
 }
 
+static inline
+enum fabd_tristate nbp_get_fet_asserted(struct nbp_device *nbp, enum nbp_fet fet)
+{
+	return (fet >= NBPF__COUNT) ? FTS_UNKNOWN : nbp->_fet[fet]._asserted;
+}
+
 extern bool nbp_control_fet_unsafe(struct nbp_device *, enum nbp_fet, bool connect);
 extern bool nbp_control_fet(struct nbp_device *, enum nbp_fet, bool connect);
 

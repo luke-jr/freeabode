@@ -42,9 +42,6 @@ void reset_complete(struct nbp_device *nbp, const struct timespec *now, uint16_t
 	
 	request_periodic(nbp, now);
 	
-	my_zmq_publisher = zmq_socket(my_zmq_context, ZMQ_PUB);
-	
-	freeabode_zmq_security(my_zmq_publisher, true);
 	assert(!zmq_bind(my_zmq_publisher, "tcp://*:2929"));
 	assert(!zmq_bind(my_zmq_publisher, "ipc://weather.ipc"));
 }
@@ -102,6 +99,54 @@ void handle_req(void * const s, struct nbp_device * const nbp)
 	free(reply.sethvacwiresuccess);
 }
 
+void got_new_subscriber(void * const s, struct nbp_device * const nbp)
+{
+	zmq_msg_t msg;
+	assert(!zmq_msg_init(&msg));
+	assert(zmq_msg_recv(&msg, s, 0) >= 0);
+	if (zmq_msg_size(&msg) < 1)
+		goto out;
+	
+	uint8_t * const data = zmq_msg_data(&msg);
+	if (!data[0])
+		goto out;
+	
+	PbEvent pbevent = PB_EVENT__INIT;
+	
+	PbWeather pbweather = PB_WEATHER__INIT;
+	pbweather.has_temperature = true;
+	pbweather.temperature = nbp->temperature;
+	pbweather.has_humidity = true;
+	pbweather.humidity = nbp->humidity;
+	pbevent.weather = &pbweather;
+	
+	PbSetHVACWireRequest *pbwire = malloc(sizeof(*pbwire) * PB_HVACWIRES___COUNT);
+	PbSetHVACWireRequest *pbwire_top = pbwire;
+	pbevent.wire_change = malloc(sizeof(*pbevent.wire_change) * PB_HVACWIRES___COUNT);
+	pbevent.n_wire_change = 0;
+	for (int i = 0; i < PB_HVACWIRES___COUNT; ++i)
+	{
+		const enum fabd_tristate asserted = nbp_get_fet_asserted(nbp, i);
+		if (asserted == FTS_UNKNOWN)
+			continue;
+		
+		pb_set_hvacwire_request__init(pbwire);
+		pbwire->wire = i;
+		pbwire->connect = asserted;
+		
+		pbevent.wire_change[pbevent.n_wire_change++] = pbwire;
+		++pbwire;
+	}
+	
+	zmq_send_protobuf(my_zmq_publisher, pb_event, &pbevent, 0);
+	
+	free(pbevent.wire_change);
+	free(pbwire_top);
+	
+out:
+	zmq_msg_close(&msg);
+}
+
 int main(int argc, char **argv)
 {
 	load_freeabode_key();
@@ -123,12 +168,18 @@ int main(int argc, char **argv)
 	assert(!zmq_bind(my_zmq_ctl, "tcp://*:2930"));
 	assert(!zmq_bind(my_zmq_ctl, "ipc://nbp.ipc"));
 	
+	my_zmq_publisher = zmq_socket(my_zmq_context, ZMQ_XPUB);
+	zmq_setsockopt(my_zmq_publisher, ZMQ_XPUB_VERBOSE, &int_one, sizeof(int_one));
+	freeabode_zmq_security(my_zmq_publisher, true);
+	// NOTE: Not binding until we confirm reset
+	
 	timespec_clear(&ts_next_periodic_req);
 	
 	struct timespec ts_now, ts_timeout;
 	zmq_pollitem_t pollitems[] = {
 		{ .fd = nbp->_fd, .events = ZMQ_POLLIN },
 		{ .socket = my_zmq_ctl, .events = ZMQ_POLLIN },
+		{ .socket = my_zmq_publisher, .events = ZMQ_POLLIN },
 	};
 	while (true)
 	{
@@ -142,5 +193,7 @@ int main(int argc, char **argv)
 			nbp_read(nbp);
 		if (pollitems[1].revents & ZMQ_POLLIN)
 			handle_req(my_zmq_ctl, nbp);
+		if (pollitems[2].revents & ZMQ_POLLIN)
+			got_new_subscriber(my_zmq_publisher, nbp);
 	}
 }
