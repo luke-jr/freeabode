@@ -14,6 +14,8 @@ enum fabd_tristate {
 	FTS_UNKNOWN,
 };
 
+static const int int_one = 1;
+
 extern void bin2hex(char *, const void *, size_t);
 extern bool hex2bin(unsigned char *, const char *, size_t);
 

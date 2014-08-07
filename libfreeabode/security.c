@@ -11,6 +11,7 @@
 
 #include "bytes.h"
 #include "security.h"
+#include "util.h"
 
 static bytes_t freeabode__privkey = BYTES_INIT;
 bytes_t freeabode__pubkey = BYTES_INIT;
@@ -85,7 +86,6 @@ void freeabode_zmq_security(void * const socket, const bool server)
 {
 	if (server)
 	{
-		static const int int_one = 1;
 		zmq_setsockopt(socket, ZMQ_CURVE_SERVER, &int_one, sizeof(int_one));
 		zmq_setsockopt(socket, ZMQ_CURVE_SECRETKEY, bytes_buf(&freeabode__privkey), bytes_len(&freeabode__privkey));
 	}
