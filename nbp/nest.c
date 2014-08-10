@@ -106,6 +106,29 @@ void nbp_got_message(struct nbp_device * const nbp, uint8_t * const buf, const s
 				nbp->cb_msg_log(nbp, now, (void*)buf);
 			}
 			break;
+		case NBPM_POWER_STATUS:
+		{
+			uint8_t state = buf[0];
+			uint8_t flags = buf[1];
+			uint8_t px0 = buf[2];
+			uint16_t u1 = upk_u16le(buf, 3);
+			uint8_t u2 = buf[5];
+			uint16_t u3 = upk_u16le(buf, 6);
+			uint16_t vi_cV = upk_u16le(buf, 8);
+			uint16_t vo_mV = upk_u16le(buf, 0xa);
+			uint16_t vb_mV = upk_u16le(buf, 0xc);
+			uint8_t pins = buf[0xe];
+			uint8_t wires = buf[0xf];
+			
+			nbp->vi_cV = vi_cV;
+			nbp->vo_mV = vo_mV;
+			nbp->vb_mV = vb_mV;
+			nbp->last_power_update = *now;
+			
+			if (nbp->cb_msg_power_status)
+				nbp->cb_msg_power_status(nbp, now, state, flags, px0, u1, u2, u3, vi_cV, vo_mV, vb_mV, pins, wires);
+			break;
+		}
 		case NBPM_WEATHER:
 			if (sz >= 4)
 			{
