@@ -66,6 +66,13 @@ void msg_weather(struct nbp_device *nbp, const struct timespec *now, uint16_t te
 	zmq_send_protobuf(my_zmq_publisher, pb_event, &pbe, 0);
 }
 
+static
+void msg_power_status(struct nbp_device * const nbp, const struct timespec * const now, const uint8_t state, const uint8_t flags, const uint8_t px0, const uint16_t u1, const uint8_t u2, const uint16_t u3, const uint16_t vi_cV, const uint16_t vo_mV, const uint16_t vb_mV, const uint8_t pins, const uint8_t wires)
+{
+	// output approx the same format as Nest sw so the same regex can be used to chart both
+	printf("power status: flags %02x, vi %d.%02dV, vo %d.%03dV; vb %d.%03dV\n", flags, vi_cV / 100, vi_cV % 100, vo_mV / 1000, vo_mV % 1000, vb_mV / 1000, vb_mV % 1000);
+}
+
 void my_nbp_control_fet_cb(struct nbp_device * const nbp, const enum nbp_fet fet, const bool connect)
 {
 	PbEvent pbevent = PB_EVENT__INIT;
@@ -152,6 +159,7 @@ int main(int argc, char **argv)
 #endif
 	nbp->cb_msg_fet_presence = reset_complete;
 	nbp->cb_msg_log = msg_log;
+	nbp->cb_msg_power_status = msg_power_status;
 	nbp->cb_msg_weather = msg_weather;
 	nbp->cb_asserting_fet_control = my_nbp_control_fet_cb;
 	
