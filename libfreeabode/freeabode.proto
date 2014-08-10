@@ -15,10 +15,16 @@ message PbWeather {
 	optional int32 humidity = 2;
 }
 
+message PbBattery {
+	optional bool charging = 1;
+	optional uint32 voltage = 2;
+}
+
 message PbEvent {
 	optional PbWeather weather = 1;
 	repeated PbSetHVACWireRequest wire_change = 2;
 	optional PbHVACGoals HVACGoals = 100;
+	optional PbBattery battery = 101;
 }
 
 message PbSetHVACWireRequest {

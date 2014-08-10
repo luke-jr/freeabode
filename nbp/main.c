@@ -71,6 +71,15 @@ void msg_power_status(struct nbp_device * const nbp, const struct timespec * con
 {
 	// output approx the same format as Nest sw so the same regex can be used to chart both
 	printf("power status: flags %02x, vi %d.%02dV, vo %d.%03dV; vb %d.%03dV\n", flags, vi_cV / 100, vi_cV % 100, vo_mV / 1000, vo_mV % 1000, vb_mV / 1000, vb_mV % 1000);
+	
+	PbEvent pbevent = PB_EVENT__INIT;
+	PbBattery pbbattery = PB_BATTERY__INIT;
+	pbbattery.has_charging = true;
+	pbbattery.charging = !(flags & 0x40);
+	pbbattery.has_voltage = true;
+	pbbattery.voltage = vb_mV;
+	pbevent.battery = &pbbattery;
+	zmq_send_protobuf(my_zmq_publisher, pb_event, &pbevent, 0);
 }
 
 void my_nbp_control_fet_cb(struct nbp_device * const nbp, const enum nbp_fet fet, const bool connect)
