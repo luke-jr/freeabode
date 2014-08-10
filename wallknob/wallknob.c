@@ -69,6 +69,7 @@ void weather_thread(void * const userp)
 	
 	char buf[0x10];
 	bool fetstatus[PB_HVACWIRES___COUNT] = {true,true,true,true,true,true,true,true,true,true,true,true};
+	bool charging = false;
 	int32_t fahrenheit = 0;
 	while (true)
 	{
@@ -81,8 +82,11 @@ void weather_thread(void * const userp)
 		for (int i = 0; i < pbevent->n_wire_change; ++i)
 			if (pbevent->wire_change[i]->wire < PB_HVACWIRES___COUNT && pbevent->wire_change[i]->wire > 0)
 			fetstatus[pbevent->wire_change[i]->wire] = pbevent->wire_change[i]->connect;
+		if (pbevent->battery && pbevent->battery->has_charging)
+			charging = pbevent->battery->charging;
 		
-		snprintf(buf, sizeof(buf), "%2u %c%c%c", (unsigned)(fahrenheit / 1000), fetstatus[PB_HVACWIRES__Y1] ? 'Y' : ' ', fetstatus[PB_HVACWIRES__G] ? 'G' : ' ', fetstatus[PB_HVACWIRES__OB] ? 'O' : ' ');
+		static const char compressor_chars[] = " YOc";
+		snprintf(buf, sizeof(buf), "%2u %c%c%c", (unsigned)(fahrenheit / 1000), compressor_chars[(fetstatus[PB_HVACWIRES__Y1] ? 1 : 0) | (fetstatus[PB_HVACWIRES__OB] ? 2 : 0)], fetstatus[PB_HVACWIRES__G] ? 'f' : ' ', charging ? 'b' : ' ');
 		
 		dfbassert(surface->Clear(surface, 0, 0xff, 0, 0x1f));
 		dfbassert(surface->SetColor(surface, 0x80, 0xff, 0x20, 0xff));
