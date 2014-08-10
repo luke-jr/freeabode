@@ -43,6 +43,7 @@ struct nbp_device {
 	void (*cb_msg_fet_presence)(struct nbp_device *, const struct timespec *now, uint16_t fet_bitmask);
 	void (*cb_msg_log)(struct nbp_device *, const struct timespec *now, const char *);
 	void (*cb_msg_weather)(struct nbp_device *, const struct timespec *now, uint16_t temperature, uint16_t humidity);
+	void (*cb_asserting_fet_control)(struct nbp_device *, enum nbp_fet, bool connection);
 	
 	struct timespec last_weather_update;
 	uint16_t temperature;  // centi-celcius

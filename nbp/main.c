@@ -66,12 +66,8 @@ void msg_weather(struct nbp_device *nbp, const struct timespec *now, uint16_t te
 	zmq_send_protobuf(my_zmq_publisher, pb_event, &pbe, 0);
 }
 
-bool my_nbp_control_fet(struct nbp_device * const nbp, const enum nbp_fet fet, const bool connect)
+void my_nbp_control_fet_cb(struct nbp_device * const nbp, const enum nbp_fet fet, const bool connect)
 {
-	bool rv = nbp_control_fet(nbp, fet, connect);
-	if (!rv)
-		return false;
-	
 	PbEvent pbevent = PB_EVENT__INIT;
 	PbSetHVACWireRequest pbwire = PB_SET_HVACWIRE_REQUEST__INIT;
 	pbwire.wire = fet;
@@ -81,8 +77,6 @@ bool my_nbp_control_fet(struct nbp_device * const nbp, const enum nbp_fet fet, c
 	*pbevent.wire_change = &pbwire;
 	zmq_send_protobuf(my_zmq_publisher, pb_event, &pbevent, 0);
 	free(pbevent.wire_change);
-	
-	return true;
 }
 
 void handle_req(void * const s, struct nbp_device * const nbp)
@@ -93,7 +87,7 @@ void handle_req(void * const s, struct nbp_device * const nbp)
 	reply.n_sethvacwiresuccess = req->n_sethvacwire;
 	reply.sethvacwiresuccess = malloc(sizeof(*reply.sethvacwiresuccess) * reply.n_sethvacwiresuccess);
 	for (size_t i = 0; i < req->n_sethvacwire; ++i)
-		reply.sethvacwiresuccess[i] = my_nbp_control_fet(nbp, req->sethvacwire[i]->wire, req->sethvacwire[i]->connect);
+		reply.sethvacwiresuccess[i] = nbp_control_fet(nbp, req->sethvacwire[i]->wire, req->sethvacwire[i]->connect);
 	pb_request__free_unpacked(req, NULL);
 	zmq_send_protobuf(s, pb_request_reply, &reply, 0);
 	free(reply.sethvacwiresuccess);
@@ -159,6 +153,7 @@ int main(int argc, char **argv)
 	nbp->cb_msg_fet_presence = reset_complete;
 	nbp->cb_msg_log = msg_log;
 	nbp->cb_msg_weather = msg_weather;
+	nbp->cb_asserting_fet_control = my_nbp_control_fet_cb;
 	
 	my_zmq_context = zmq_ctx_new();
 	start_zap_handler(my_zmq_context);

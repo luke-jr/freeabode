@@ -238,6 +238,7 @@ bool nbp_control_fet_unsafe(struct nbp_device * const nbp, const enum nbp_fet fe
 			clock_gettime(CLOCK_MONOTONIC, &nbp->_fet[fet]._ts_last_shutoff);
 		nbp->_fet[fet]._asserted = connect;
 	}
+	nbp->cb_asserting_fet_control(nbp, fet, connect);
 	return true;
 }
 
