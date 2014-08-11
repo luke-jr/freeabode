@@ -42,6 +42,17 @@ void my_load_font(struct my_font * const myfont, const char * const fontname, co
 	dfbassert(myfont->dfbfont->GetDescender(myfont->dfbfont, &myfont->descender));
 }
 
+static
+void my_win_init(IDirectFBWindow * const window, IDirectFBSurface ** const out_surface, DFBDimension * const out_size)
+{
+	dfbassert(window->GetSurface(window, out_surface));
+	if (out_size)
+		dfbassert(window->GetSize(window, &out_size->w, &out_size->h));
+	dfbassert((*out_surface)->Clear(*out_surface, 0, 0, 0, 0));
+	dfbassert((*out_surface)->Flip(*out_surface, NULL, DSFLIP_BLIT));
+	dfbassert(window->SetOpacity(window, 0xff));
+}
+
 static inline
 int32_t decicelcius_to_millifahrenheit(int32_t dc)
 {
@@ -69,18 +80,10 @@ void weather_thread(void * const userp)
 	
 	IDirectFBWindow * const window = ww->temperature;
 	IDirectFBSurface *surface, *surface_hvac_indicator;
+	DFBDimension winsize_temp;
 	
-	dfbassert(window->GetSurface(window, &surface));
-	int width, height;
-	dfbassert(window->GetSize(window, &width, &height));
-	dfbassert(surface->Clear(surface, 0, 0, 0, 0));
-	dfbassert(surface->Flip(surface, NULL, DSFLIP_BLIT));
-	dfbassert(window->SetOpacity(window, 0xff));
-	
-	dfbassert(ww->hvac_indicator->GetSurface(ww->hvac_indicator, &surface_hvac_indicator));
-	dfbassert(surface_hvac_indicator->Clear(surface_hvac_indicator, 0, 0, 0, 0));
-	dfbassert(surface_hvac_indicator->Flip(surface_hvac_indicator, NULL, DSFLIP_BLIT));
-	dfbassert(ww->hvac_indicator->SetOpacity(ww->hvac_indicator, 0xff));
+	my_win_init(window, &surface, &winsize_temp);
+	my_win_init(ww->hvac_indicator, &surface_hvac_indicator, NULL);
 	
 	char buf[0x10];
 	bool fetstatus[PB_HVACWIRES___COUNT] = {true,true,true,true,true,true,true,true,true,true,true,true};
@@ -114,7 +117,7 @@ void weather_thread(void * const userp)
 			dfbassert(surface_hvac_indicator->Clear(surface_hvac_indicator, 0xff, 0, 0, 0x1f));
 			dfbassert(surface_hvac_indicator->SetColor(surface_hvac_indicator, 0x80, 0xff, 0x20, 0xff));
 			dfbassert(surface_hvac_indicator->SetFont(surface_hvac_indicator, font_h4.dfbfont));
-			dfbassert(surface_hvac_indicator->DrawString(surface_hvac_indicator, buf, -1, width / 2, font_h4.height, DSTF_CENTER));
+			dfbassert(surface_hvac_indicator->DrawString(surface_hvac_indicator, buf, -1, winsize_temp.w / 2, font_h4.height, DSTF_CENTER));
 			dfbassert(surface_hvac_indicator->Flip(surface_hvac_indicator, NULL, DSFLIP_BLIT));
 		}
 		
@@ -124,7 +127,7 @@ void weather_thread(void * const userp)
 		dfbassert(surface->Clear(surface, 0, 0xff, 0, 0x1f));
 		dfbassert(surface->SetColor(surface, 0x80, 0xff, 0x20, 0xff));
 		dfbassert(surface->SetFont(surface, font_h2.dfbfont));
-		dfbassert(surface->DrawString(surface, buf, -1, width, font_h2.height, DSTF_RIGHT));
+		dfbassert(surface->DrawString(surface, buf, -1, winsize_temp.w, font_h2.height, DSTF_RIGHT));
 		dfbassert(surface->Flip(surface, NULL, DSFLIP_BLIT));
 	}
 }
@@ -154,14 +157,8 @@ void goal_thread(void * const userp)
 	
 	IDirectFBWindow * const window = userp;
 	IDirectFBSurface *surface;
-	dfbassert(window->GetSurface(window, &surface));
-	
-	int width, height;
-	dfbassert(window->GetSize(window, &width, &height));
-	
-	dfbassert(surface->Clear(surface, 0, 0, 0, 0));
-	dfbassert(surface->Flip(surface, NULL, DSFLIP_BLIT));
-	dfbassert(window->SetOpacity(window, 0xff));
+	DFBDimension winsize_tempgoal;
+	my_win_init(window, &surface, &winsize_tempgoal);
 	
 	zmq_pollitem_t pollitems[] = {
 		{ .socket = client_tstat, .events = ZMQ_POLLIN },
@@ -205,7 +202,7 @@ void goal_thread(void * const userp)
 		else
 			dfbassert(surface->SetColor(surface, 0xff, 0x80, 0x20, 0xff));
 		dfbassert(surface->SetFont(surface, font_h4.dfbfont));
-		dfbassert(surface->DrawString(surface, buf, -1, width, font_h4.height, DSTF_RIGHT));
+		dfbassert(surface->DrawString(surface, buf, -1, winsize_tempgoal.w, font_h4.height, DSTF_RIGHT));
 		dfbassert(surface->Flip(surface, NULL, DSFLIP_BLIT));
 	}
 }
