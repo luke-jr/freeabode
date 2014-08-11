@@ -79,11 +79,12 @@ void weather_thread(void * const userp)
 	
 	
 	IDirectFBWindow * const window = ww->temperature;
-	IDirectFBSurface *surface, *surface_hvac_indicator;
+	IDirectFBSurface *surface, *surface_hvac_indicator, *surface_charge;
 	DFBDimension winsize_temp;
 	
 	my_win_init(window, &surface, &winsize_temp);
 	my_win_init(ww->hvac_indicator, &surface_hvac_indicator, NULL);
+	my_win_init(ww->charging_indicator, &surface_charge, NULL);
 	
 	char buf[0x10];
 	bool fetstatus[PB_HVACWIRES___COUNT] = {true,true,true,true,true,true,true,true,true,true,true,true};
@@ -119,6 +120,17 @@ void weather_thread(void * const userp)
 			dfbassert(surface_hvac_indicator->SetFont(surface_hvac_indicator, font_h4.dfbfont));
 			dfbassert(surface_hvac_indicator->DrawString(surface_hvac_indicator, buf, -1, winsize_temp.w / 2, font_h4.height, DSTF_CENTER));
 			dfbassert(surface_hvac_indicator->Flip(surface_hvac_indicator, NULL, DSFLIP_BLIT));
+		}
+		
+		{
+			dfbassert(surface_charge->Clear(surface_charge, 0, 0, 0xff, 0x1f));
+			if (charging)
+			{
+				dfbassert(surface_charge->SetColor(surface_charge, 0x80, 0xff, 0x20, 0xff));
+				dfbassert(surface_charge->SetFont(surface_charge, font_h4.dfbfont));
+				dfbassert(surface_charge->DrawString(surface_charge, "Charging", -1, winsize_temp.w / 2, font_h4.height, DSTF_CENTER));
+			}
+			dfbassert(surface_charge->Flip(surface_charge, NULL, DSFLIP_BLIT));
 		}
 		
 		static const char compressor_chars[] = " YOc";
@@ -316,6 +328,10 @@ int main(int argc, char **argv)
 		windesc.posy += font_h4.height;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		weather_windows.hvac_indicator = window;
+		
+		windesc.posy += font_h4.height;
+		dfbassert(layer->CreateWindow(layer, &windesc, &window));
+		weather_windows.charging_indicator = window;
 		
 		zmq_threadstart(weather_thread, &weather_windows);
 	}
