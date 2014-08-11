@@ -48,9 +48,18 @@ int32_t decicelcius_to_millifahrenheit(int32_t dc)
 	return dc * 90 / 5 + 32000;
 }
 
+struct weather_windows {
+	IDirectFBWindow *temperature;
+	IDirectFBWindow *humidity;
+	IDirectFBWindow *hvac_indicator;
+	IDirectFBWindow *charging_indicator;
+};
+
 static
 void weather_thread(void * const userp)
 {
+	const struct weather_windows * const ww = userp;
+	
 	void *client_weather;
 	client_weather = zmq_socket(my_zmq_context, ZMQ_SUB);
 	freeabode_zmq_security(client_weather, false);
@@ -58,7 +67,7 @@ void weather_thread(void * const userp)
 	assert(!zmq_setsockopt(client_weather, ZMQ_SUBSCRIBE, NULL, 0));
 	
 	
-	IDirectFBWindow * const window = userp;
+	IDirectFBWindow * const window = ww->temperature;
 	IDirectFBSurface *surface;
 	dfbassert(window->GetSurface(window, &surface));
 	int width, height;
@@ -236,6 +245,7 @@ int main(int argc, char **argv)
 	assert(!pipe(adjusting_pipe));
 	
 	IDirectFBDisplayLayer *layer;
+	struct weather_windows weather_windows;
 	
 	dfbassert(DirectFBInit(&argc, &argv));
 	dfbassert(DirectFBCreate(&dfb));
@@ -273,7 +283,10 @@ int main(int argc, char **argv)
 		windesc.posx = center_x - (windesc.width / 2);
 		windesc.posy = height / 2;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
-		zmq_threadstart(weather_thread, window);
+		weather_windows = (struct weather_windows){
+			.temperature = window,
+		};
+		zmq_threadstart(weather_thread, &weather_windows);
 		
 		windesc.height = font_h4.height - font_h4.descender;
 		windesc.posy += font_h2.height;
