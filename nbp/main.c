@@ -6,6 +6,7 @@
 #include <zmq.h>
 
 #include <freeabode/freeabode.pb-c.h>
+#include <freeabode/logging.h>
 #include <freeabode/security.h>
 #include <freeabode/util.h>
 #include "nest.h"
@@ -21,7 +22,7 @@ void request_periodic(struct nbp_device *nbp, const struct timespec *now)
 	timespec_add_ms(now, periodic_req_interval * 1000, &ts_next_periodic_req);
 	nbp_send(nbp, NBPM_REQ_PERIODIC, NULL, 0);
 #ifdef DEBUG_NBP
-	puts("Periodic data request");
+	applog(LOG_DEBUG, "Periodic data request");
 #endif
 }
 
@@ -30,7 +31,7 @@ void debug_msg(struct nbp_device * const nbp, const struct timespec * const now,
 {
 	char hexdata[(datasz * 2) + 1];
 	bin2hex(hexdata, data, datasz);
-	printf("msg %04x data %s\n", mtype, hexdata);
+	applog(LOG_DEBUG, "msg %04x data %s", mtype, hexdata);
 }
 #endif
 
@@ -38,7 +39,7 @@ static
 void reset_complete(struct nbp_device *nbp, const struct timespec *now, uint16_t fet_bitmask)
 {
 	nbp->cb_msg_fet_presence = NULL;
-	printf("Backplate reset complete\n");
+	applog(LOG_INFO, "Backplate reset complete");
 	
 	request_periodic(nbp, now);
 	
@@ -48,13 +49,13 @@ void reset_complete(struct nbp_device *nbp, const struct timespec *now, uint16_t
 
 void msg_log(struct nbp_device *nbp, const struct timespec *now, const char *msg)
 {
-	printf("Backplate: %s\n", msg);
+	applog(LOG_INFO, "Backplate: %s", msg);
 }
 
 void msg_weather(struct nbp_device *nbp, const struct timespec *now, uint16_t temperature, uint16_t humidity)
 {
 	int32_t fahrenheit = ((int32_t)temperature) * 90 / 5 + 32000;
-	printf("Temperature %3d.%02d C (%4d.%03d F)    Humidity: %d.%d%%\n", temperature / 100, temperature % 100, fahrenheit / 1000, fahrenheit % 1000, humidity / 10, humidity % 10);
+	applog(LOG_INFO, "Temperature %3d.%02d C (%4d.%03d F)    Humidity: %d.%d%%", temperature / 100, temperature % 100, fahrenheit / 1000, fahrenheit % 1000, humidity / 10, humidity % 10);
 	
 	PbEvent pbe = PB_EVENT__INIT;
 	PbWeather pb = PB_WEATHER__INIT;
@@ -70,7 +71,7 @@ static
 void msg_power_status(struct nbp_device * const nbp, const struct timespec * const now, const uint8_t state, const uint8_t flags, const uint8_t px0, const uint16_t u1, const uint8_t u2, const uint16_t u3, const uint16_t vi_cV, const uint16_t vo_mV, const uint16_t vb_mV, const uint8_t pins, const uint8_t wires)
 {
 	// output approx the same format as Nest sw so the same regex can be used to chart both
-	printf("power status: flags %02x, vi %d.%02dV, vo %d.%03dV; vb %d.%03dV\n", flags, vi_cV / 100, vi_cV % 100, vo_mV / 1000, vo_mV % 1000, vb_mV / 1000, vb_mV % 1000);
+	applog(LOG_INFO, "power status: flags %02x, vi %d.%02dV, vo %d.%03dV; vb %d.%03dV", flags, vi_cV / 100, vi_cV % 100, vo_mV / 1000, vo_mV % 1000, vb_mV / 1000, vb_mV % 1000);
 	
 	PbEvent pbevent = PB_EVENT__INIT;
 	PbBattery pbbattery = PB_BATTERY__INIT;
