@@ -81,25 +81,32 @@ void weather_thread(void * const userp)
 	
 	
 	IDirectFBWindow * const window = ww->temperature;
-	IDirectFBSurface *surface, *surface_hvac_indicator, *surface_charge;
+	IDirectFBSurface *surface, *surface_hvac_indicator, *surface_charge, *surface_humidity;
 	DFBDimension winsize_temp, winsize_hvac_indicator, winsize_charge;
 	
 	my_win_init(window, &surface, &winsize_temp);
 	my_win_init(ww->hvac_indicator, &surface_hvac_indicator, &winsize_hvac_indicator);
 	my_win_init(ww->charging_indicator, &surface_charge, &winsize_charge);
+	my_win_init(ww->humidity, &surface_humidity, NULL);
 	
 	char buf[0x10];
 	bool fetstatus[PB_HVACWIRES___COUNT] = {true,true,true,true,true,true,true,true,true,true,true,true};
 	bool charging = false;
 	int32_t fahrenheit = 0;
+	unsigned humidity = 0;
 	while (true)
 	{
 		PbEvent *pbevent;
 		zmq_recv_protobuf(client_weather, pb_event, pbevent, NULL);
 		
 		PbWeather *weather = pbevent->weather;
-		if (weather && weather->has_temperature)
-			fahrenheit = decicelcius_to_millifahrenheit(weather->temperature);
+		if (weather)
+		{
+			if (weather->has_temperature)
+				fahrenheit = decicelcius_to_millifahrenheit(weather->temperature);
+			if (weather->has_humidity)
+				humidity = weather->humidity;
+		}
 		for (int i = 0; i < pbevent->n_wire_change; ++i)
 			if (pbevent->wire_change[i]->wire < PB_HVACWIRES___COUNT && pbevent->wire_change[i]->wire > 0)
 			fetstatus[pbevent->wire_change[i]->wire] = pbevent->wire_change[i]->connect;
@@ -133,6 +140,15 @@ void weather_thread(void * const userp)
 				dfbassert(surface_charge->DrawString(surface_charge, "Charging", -1, winsize_charge.w / 2, font_h4.height, DSTF_CENTER));
 			}
 			dfbassert(surface_charge->Flip(surface_charge, NULL, DSFLIP_BLIT));
+		}
+		
+		{
+			snprintf(buf, sizeof(buf), "%02u", humidity / 10);
+			dfbassert(surface->Clear(surface_humidity, 0xff, 0, 0, 0x1f));
+			dfbassert(surface->SetColor(surface_humidity, 0x80, 0xff, 0x20, 0xff));
+			dfbassert(surface->SetFont(surface_humidity, font_h2.dfbfont));
+			dfbassert(surface->DrawString(surface_humidity, buf, -1, 0, font_h2.height, DSTF_LEFT));
+			dfbassert(surface->Flip(surface_humidity, NULL, DSFLIP_BLIT));
 		}
 		
 		snprintf(buf, sizeof(buf), "%2u", (unsigned)(fahrenheit / 1000));
@@ -320,6 +336,11 @@ int main(int argc, char **argv)
 		weather_windows = (struct weather_windows){
 			.temperature = window,
 		};
+		
+		windesc.posx += windesc.width + font_h2.width_x;
+		dfbassert(layer->CreateWindow(layer, &windesc, &window));
+		weather_windows.humidity = window;
+		windesc.posx -= windesc.width + font_h2.width_x;
 		
 		windesc.height = font_h4.height - font_h4.descender;
 		windesc.posy += font_h2.height;
