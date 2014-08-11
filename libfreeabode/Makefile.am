@@ -1,6 +1,7 @@
 lib_LTLIBRARIES = libfreeabode.la
 
 libfreeabode_la_SOURCES = \
+	logging.c \
 	security.c \
 	util.c
 nodist_libfreeabode_la_SOURCES = $(builddir)/freeabode.pb-c.c
@@ -11,6 +12,7 @@ libfreeabode_la_LIBADD = $(LIBSODIUM_LIBS) $(LIBZMQ_LIBS) $(PROTOBUF_C_LIBS)
 libfreeabode_includedir = $(includedir)/freeabode
 libfreeabode_include_HEADERS = \
 	bytes.h \
+	logging.h \
 	security.h \
 	util.h  \
 	$(builddir)/freeabode.pb-c.h
