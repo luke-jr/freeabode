@@ -31,6 +31,7 @@ struct my_font {
 	IDirectFBFont *dfbfont;
 	int height;
 	int descender;
+	int width_x;
 };
 struct my_font font_h2, font_h4;
 
@@ -40,6 +41,7 @@ void my_load_font(struct my_font * const myfont, const char * const fontname, co
 	dfbassert(dfb->CreateFont(dfb, fontname, fontdsc, &myfont->dfbfont));
 	dfbassert(myfont->dfbfont->GetHeight(myfont->dfbfont, &myfont->height));
 	dfbassert(myfont->dfbfont->GetDescender(myfont->dfbfont, &myfont->descender));
+	dfbassert(myfont->dfbfont->GetStringWidth(myfont->dfbfont, "x", 1, &myfont->width_x));
 }
 
 static
@@ -80,11 +82,11 @@ void weather_thread(void * const userp)
 	
 	IDirectFBWindow * const window = ww->temperature;
 	IDirectFBSurface *surface, *surface_hvac_indicator, *surface_charge;
-	DFBDimension winsize_temp;
+	DFBDimension winsize_temp, winsize_hvac_indicator, winsize_charge;
 	
 	my_win_init(window, &surface, &winsize_temp);
-	my_win_init(ww->hvac_indicator, &surface_hvac_indicator, NULL);
-	my_win_init(ww->charging_indicator, &surface_charge, NULL);
+	my_win_init(ww->hvac_indicator, &surface_hvac_indicator, &winsize_hvac_indicator);
+	my_win_init(ww->charging_indicator, &surface_charge, &winsize_charge);
 	
 	char buf[0x10];
 	bool fetstatus[PB_HVACWIRES___COUNT] = {true,true,true,true,true,true,true,true,true,true,true,true};
@@ -118,7 +120,7 @@ void weather_thread(void * const userp)
 			dfbassert(surface_hvac_indicator->Clear(surface_hvac_indicator, 0xff, 0, 0, 0x1f));
 			dfbassert(surface_hvac_indicator->SetColor(surface_hvac_indicator, 0x80, 0xff, 0x20, 0xff));
 			dfbassert(surface_hvac_indicator->SetFont(surface_hvac_indicator, font_h4.dfbfont));
-			dfbassert(surface_hvac_indicator->DrawString(surface_hvac_indicator, buf, -1, winsize_temp.w / 2, font_h4.height, DSTF_CENTER));
+			dfbassert(surface_hvac_indicator->DrawString(surface_hvac_indicator, buf, -1, winsize_hvac_indicator.w / 2, font_h4.height, DSTF_CENTER));
 			dfbassert(surface_hvac_indicator->Flip(surface_hvac_indicator, NULL, DSFLIP_BLIT));
 		}
 		
@@ -128,13 +130,12 @@ void weather_thread(void * const userp)
 			{
 				dfbassert(surface_charge->SetColor(surface_charge, 0x80, 0xff, 0x20, 0xff));
 				dfbassert(surface_charge->SetFont(surface_charge, font_h4.dfbfont));
-				dfbassert(surface_charge->DrawString(surface_charge, "Charging", -1, winsize_temp.w / 2, font_h4.height, DSTF_CENTER));
+				dfbassert(surface_charge->DrawString(surface_charge, "Charging", -1, winsize_charge.w / 2, font_h4.height, DSTF_CENTER));
 			}
 			dfbassert(surface_charge->Flip(surface_charge, NULL, DSFLIP_BLIT));
 		}
 		
-		static const char compressor_chars[] = " YOc";
-		snprintf(buf, sizeof(buf), "%2u %c%c%c", (unsigned)(fahrenheit / 1000), compressor_chars[(fetstatus[PB_HVACWIRES__Y1] ? 1 : 0) | (fetstatus[PB_HVACWIRES__OB] ? 2 : 0)], fetstatus[PB_HVACWIRES__G] ? 'f' : ' ', charging ? 'b' : ' ');
+		snprintf(buf, sizeof(buf), "%2u", (unsigned)(fahrenheit / 1000));
 		
 		dfbassert(surface->Clear(surface, 0, 0xff, 0, 0x1f));
 		dfbassert(surface->SetColor(surface, 0x80, 0xff, 0x20, 0xff));
@@ -308,12 +309,12 @@ int main(int argc, char **argv)
 		DFBWindowDescription windesc = {
 			.flags = DWDESC_CAPS | DWDESC_WIDTH | DWDESC_HEIGHT | DWDESC_POSX | DWDESC_POSY | DWDESC_OPTIONS,
 			.caps = DWCAPS_ALPHACHANNEL,
-			.width = width * 2 / 3,
+			.width = (width * 2 / 3 / 2) - (font_h2.width_x / 2),
 			.height = font_h2.height - font_h2.descender,
 			.posy = 0,
 			.options = DWOP_ALPHACHANNEL,
 		};
-		windesc.posx = center_x - (windesc.width / 2);
+		windesc.posx = center_x - (windesc.width + font_h2.width_x / 2);
 		windesc.posy = height / 2;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		weather_windows = (struct weather_windows){
@@ -325,6 +326,8 @@ int main(int argc, char **argv)
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		zmq_threadstart(goal_thread, window);
 		
+		windesc.width = width * 2 / 3;
+		windesc.posx = center_x - (windesc.width / 2);
 		windesc.posy += font_h4.height;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		weather_windows.hvac_indicator = window;
