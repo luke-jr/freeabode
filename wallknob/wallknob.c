@@ -30,6 +30,7 @@ static void *my_zmq_context;
 struct my_font {
 	IDirectFBFont *dfbfont;
 	int height;
+	int ascender;
 	int descender;
 	int width_x;
 };
@@ -40,6 +41,7 @@ void my_load_font(struct my_font * const myfont, const char * const fontname, co
 {
 	dfbassert(dfb->CreateFont(dfb, fontname, fontdsc, &myfont->dfbfont));
 	dfbassert(myfont->dfbfont->GetHeight(myfont->dfbfont, &myfont->height));
+	dfbassert(myfont->dfbfont->GetAscender(myfont->dfbfont, &myfont->ascender));
 	dfbassert(myfont->dfbfont->GetDescender(myfont->dfbfont, &myfont->descender));
 	dfbassert(myfont->dfbfont->GetStringWidth(myfont->dfbfont, "x", 1, &myfont->width_x));
 }
@@ -331,7 +333,7 @@ int main(int argc, char **argv)
 			.options = DWOP_ALPHACHANNEL,
 		};
 		windesc.posx = center_x - (windesc.width + font_h2.width_x / 2);
-		windesc.posy = height / 2;
+		windesc.posy = (height / 2) - (font_h2.height - font_h2.ascender);
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		weather_windows = (struct weather_windows){
 			.temperature = window,
