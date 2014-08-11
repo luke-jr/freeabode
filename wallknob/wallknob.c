@@ -68,13 +68,19 @@ void weather_thread(void * const userp)
 	
 	
 	IDirectFBWindow * const window = ww->temperature;
-	IDirectFBSurface *surface;
+	IDirectFBSurface *surface, *surface_hvac_indicator;
+	
 	dfbassert(window->GetSurface(window, &surface));
 	int width, height;
 	dfbassert(window->GetSize(window, &width, &height));
 	dfbassert(surface->Clear(surface, 0, 0, 0, 0));
 	dfbassert(surface->Flip(surface, NULL, DSFLIP_BLIT));
 	dfbassert(window->SetOpacity(window, 0xff));
+	
+	dfbassert(ww->hvac_indicator->GetSurface(ww->hvac_indicator, &surface_hvac_indicator));
+	dfbassert(surface_hvac_indicator->Clear(surface_hvac_indicator, 0, 0, 0, 0));
+	dfbassert(surface_hvac_indicator->Flip(surface_hvac_indicator, NULL, DSFLIP_BLIT));
+	dfbassert(ww->hvac_indicator->SetOpacity(ww->hvac_indicator, 0xff));
 	
 	char buf[0x10];
 	bool fetstatus[PB_HVACWIRES___COUNT] = {true,true,true,true,true,true,true,true,true,true,true,true};
@@ -93,6 +99,24 @@ void weather_thread(void * const userp)
 			fetstatus[pbevent->wire_change[i]->wire] = pbevent->wire_change[i]->connect;
 		if (pbevent->battery && pbevent->battery->has_charging)
 			charging = pbevent->battery->charging;
+		
+		{
+			if (fetstatus[PB_HVACWIRES__Y1])
+			{
+				snprintf(buf, sizeof(buf), "%s%s", fetstatus[PB_HVACWIRES__OB] ? "Cool" : "Heat", fetstatus[PB_HVACWIRES__G] ? "" : " (no fan)");
+			}
+			else
+			if (fetstatus[PB_HVACWIRES__G])
+				strcpy(buf, "Fan");
+			else
+				strcpy(buf, "Off");
+			
+			dfbassert(surface_hvac_indicator->Clear(surface_hvac_indicator, 0xff, 0, 0, 0x1f));
+			dfbassert(surface_hvac_indicator->SetColor(surface_hvac_indicator, 0x80, 0xff, 0x20, 0xff));
+			dfbassert(surface_hvac_indicator->SetFont(surface_hvac_indicator, font_h4.dfbfont));
+			dfbassert(surface_hvac_indicator->DrawString(surface_hvac_indicator, buf, -1, width / 2, font_h4.height, DSTF_CENTER));
+			dfbassert(surface_hvac_indicator->Flip(surface_hvac_indicator, NULL, DSFLIP_BLIT));
+		}
 		
 		static const char compressor_chars[] = " YOc";
 		snprintf(buf, sizeof(buf), "%2u %c%c%c", (unsigned)(fahrenheit / 1000), compressor_chars[(fetstatus[PB_HVACWIRES__Y1] ? 1 : 0) | (fetstatus[PB_HVACWIRES__OB] ? 2 : 0)], fetstatus[PB_HVACWIRES__G] ? 'f' : ' ', charging ? 'b' : ' ');
@@ -286,12 +310,17 @@ int main(int argc, char **argv)
 		weather_windows = (struct weather_windows){
 			.temperature = window,
 		};
-		zmq_threadstart(weather_thread, &weather_windows);
 		
 		windesc.height = font_h4.height - font_h4.descender;
 		windesc.posy += font_h2.height;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		zmq_threadstart(goal_thread, window);
+		
+		windesc.posy += font_h4.height;
+		dfbassert(layer->CreateWindow(layer, &windesc, &window));
+		weather_windows.hvac_indicator = window;
+		
+		zmq_threadstart(weather_thread, &weather_windows);
 	}
 	
 	// Main thread now handles input
