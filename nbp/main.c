@@ -85,6 +85,8 @@ void msg_power_status(struct nbp_device * const nbp, const struct timespec * con
 
 void my_nbp_control_fet_cb(struct nbp_device * const nbp, const enum nbp_fet fet, const bool connect)
 {
+	applog(LOG_INFO, "Setting FET %u to %d", (unsigned)fet, connect);
+	
 	PbEvent pbevent = PB_EVENT__INIT;
 	PbSetHVACWireRequest pbwire = PB_SET_HVACWIRE_REQUEST__INIT;
 	pbwire.wire = fet;
