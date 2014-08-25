@@ -123,7 +123,9 @@ void nbp_got_message(struct nbp_device * const nbp, uint8_t * const buf, const s
 			nbp->vi_cV = vi_cV;
 			nbp->vo_mV = vo_mV;
 			nbp->vb_mV = vb_mV;
+			nbp->power_flags = flags;
 			nbp->last_power_update = *now;
+			nbp->has_powerinfo = true;
 			
 			if (nbp->cb_msg_power_status)
 				nbp->cb_msg_power_status(nbp, now, state, flags, px0, u1, u2, u3, vi_cV, vo_mV, vb_mV, pins, wires);

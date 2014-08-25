@@ -133,8 +133,18 @@ void got_new_subscriber(void * const s, struct nbp_device * const nbp)
 		pbweather.temperature = nbp->temperature;
 		pbweather.has_humidity = true;
 		pbweather.humidity = nbp->humidity;
+		pbevent.weather = &pbweather;
 	}
-	pbevent.weather = &pbweather;
+	
+	PbBattery pbbattery = PB_BATTERY__INIT;
+	if (nbp->has_powerinfo)
+	{
+		pbbattery.has_charging = true;
+		pbbattery.charging = !(nbp->power_flags & 0x40);
+		pbbattery.has_voltage = true;
+		pbbattery.voltage = nbp->vb_mV;
+		pbevent.battery = &pbbattery;
+	}
 	
 	PbSetHVACWireRequest *pbwire = malloc(sizeof(*pbwire) * PB_HVACWIRES___COUNT);
 	PbSetHVACWireRequest *pbwire_top = pbwire;

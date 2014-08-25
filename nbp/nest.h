@@ -59,10 +59,12 @@ struct nbp_device {
 	uint16_t temperature;  // centi-celcius
 	uint16_t humidity;     // per-millis
 	
+	bool has_powerinfo;
 	struct timespec last_power_update;
 	uint16_t vi_cV;
 	uint16_t vo_mV;
 	uint16_t vb_mV;
+	uint8_t power_flags;
 	
 	int _fd;
 	bytes_t _rdbuf;
