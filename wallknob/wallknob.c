@@ -90,6 +90,19 @@ void update_win_temp(struct my_window_info * const wi, const int32_t decicelcius
 }
 
 static
+void update_win_humid(struct my_window_info * const wi, const unsigned humidity)
+{
+	char buf[0x10];
+	snprintf(buf, sizeof(buf), "%02u", humidity / 10);
+	
+	dfbassert(wi->surface->Clear(wi->surface, 0xff, 0, 0, 0x1f));
+	dfbassert(wi->surface->SetColor(wi->surface, 0x80, 0xff, 0x20, 0xff));
+	dfbassert(wi->surface->SetFont(wi->surface, font_h2.dfbfont));
+	dfbassert(wi->surface->DrawString(wi->surface, buf, -1, 0, font_h2.height, DSTF_LEFT));
+	dfbassert(wi->surface->Flip(wi->surface, NULL, DSFLIP_BLIT));
+}
+
+static
 void weather_thread(void * const userp)
 {
 	struct weather_windows * const ww = userp;
@@ -159,15 +172,7 @@ void weather_thread(void * const userp)
 			dfbassert(ww->i_charging.surface->Flip(ww->i_charging.surface, NULL, DSFLIP_BLIT));
 		}
 		
-		{
-			snprintf(buf, sizeof(buf), "%02u", humidity / 10);
-			dfbassert(ww->humid.surface->Clear(ww->humid.surface, 0xff, 0, 0, 0x1f));
-			dfbassert(ww->humid.surface->SetColor(ww->humid.surface, 0x80, 0xff, 0x20, 0xff));
-			dfbassert(ww->humid.surface->SetFont(ww->humid.surface, font_h2.dfbfont));
-			dfbassert(ww->humid.surface->DrawString(ww->humid.surface, buf, -1, 0, font_h2.height, DSTF_LEFT));
-			dfbassert(ww->humid.surface->Flip(ww->humid.surface, NULL, DSFLIP_BLIT));
-		}
-		
+		update_win_humid(&ww->humid, humidity);
 		update_win_temp(&ww->temp, decicelcius);
 	}
 }
