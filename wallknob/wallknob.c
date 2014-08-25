@@ -46,15 +46,20 @@ void my_load_font(struct my_font * const myfont, const char * const fontname, co
 	dfbassert(myfont->dfbfont->GetStringWidth(myfont->dfbfont, "x", 1, &myfont->width_x));
 }
 
+struct my_window_info {
+	IDirectFBWindow *win;
+	IDirectFBSurface *surface;
+	DFBDimension sz;
+};
+
 static
-void my_win_init(IDirectFBWindow * const window, IDirectFBSurface ** const out_surface, DFBDimension * const out_size)
+void my_win_init(struct my_window_info * const wininfo)
 {
-	dfbassert(window->GetSurface(window, out_surface));
-	if (out_size)
-		dfbassert(window->GetSize(window, &out_size->w, &out_size->h));
-	dfbassert((*out_surface)->Clear(*out_surface, 0, 0, 0, 0));
-	dfbassert((*out_surface)->Flip(*out_surface, NULL, DSFLIP_BLIT));
-	dfbassert(window->SetOpacity(window, 0xff));
+	dfbassert(wininfo->win->GetSurface(wininfo->win, &wininfo->surface));
+	dfbassert(wininfo->win->GetSize(wininfo->win, &wininfo->sz.w, &wininfo->sz.h));
+	dfbassert(wininfo->surface->Clear(wininfo->surface, 0, 0, 0, 0));
+	dfbassert(wininfo->surface->Flip(wininfo->surface, NULL, DSFLIP_BLIT));
+	dfbassert(wininfo->win->SetOpacity(wininfo->win, 0xff));
 }
 
 static inline
@@ -64,16 +69,16 @@ int32_t decicelcius_to_millifahrenheit(int32_t dc)
 }
 
 struct weather_windows {
-	IDirectFBWindow *temperature;
-	IDirectFBWindow *humidity;
-	IDirectFBWindow *hvac_indicator;
-	IDirectFBWindow *charging_indicator;
+	struct my_window_info temp;
+	struct my_window_info humid;
+	struct my_window_info i_hvac;
+	struct my_window_info i_charging;
 };
 
 static
 void weather_thread(void * const userp)
 {
-	const struct weather_windows * const ww = userp;
+	struct weather_windows * const ww = userp;
 	
 	void *client_weather;
 	client_weather = zmq_socket(my_zmq_context, ZMQ_SUB);
@@ -82,14 +87,10 @@ void weather_thread(void * const userp)
 	assert(!zmq_setsockopt(client_weather, ZMQ_SUBSCRIBE, NULL, 0));
 	
 	
-	IDirectFBWindow * const window = ww->temperature;
-	IDirectFBSurface *surface, *surface_hvac_indicator, *surface_charge, *surface_humidity;
-	DFBDimension winsize_temp, winsize_hvac_indicator, winsize_charge;
-	
-	my_win_init(window, &surface, &winsize_temp);
-	my_win_init(ww->hvac_indicator, &surface_hvac_indicator, &winsize_hvac_indicator);
-	my_win_init(ww->charging_indicator, &surface_charge, &winsize_charge);
-	my_win_init(ww->humidity, &surface_humidity, NULL);
+	my_win_init(&ww->temp);
+	my_win_init(&ww->i_hvac);
+	my_win_init(&ww->i_charging);
+	my_win_init(&ww->humid);
 	
 	char buf[0x10];
 	bool fetstatus[PB_HVACWIRES___COUNT] = {true,true,true,true,true,true,true,true,true,true,true,true};
@@ -126,40 +127,40 @@ void weather_thread(void * const userp)
 			else
 				strcpy(buf, "Off");
 			
-			dfbassert(surface_hvac_indicator->Clear(surface_hvac_indicator, 0xff, 0, 0, 0x1f));
-			dfbassert(surface_hvac_indicator->SetColor(surface_hvac_indicator, 0x80, 0xff, 0x20, 0xff));
-			dfbassert(surface_hvac_indicator->SetFont(surface_hvac_indicator, font_h4.dfbfont));
-			dfbassert(surface_hvac_indicator->DrawString(surface_hvac_indicator, buf, -1, winsize_hvac_indicator.w / 2, font_h4.height, DSTF_CENTER));
-			dfbassert(surface_hvac_indicator->Flip(surface_hvac_indicator, NULL, DSFLIP_BLIT));
+			dfbassert(ww->i_hvac.surface->Clear(ww->i_hvac.surface, 0xff, 0, 0, 0x1f));
+			dfbassert(ww->i_hvac.surface->SetColor(ww->i_hvac.surface, 0x80, 0xff, 0x20, 0xff));
+			dfbassert(ww->i_hvac.surface->SetFont(ww->i_hvac.surface, font_h4.dfbfont));
+			dfbassert(ww->i_hvac.surface->DrawString(ww->i_hvac.surface, buf, -1, ww->i_hvac.sz.w / 2, font_h4.height, DSTF_CENTER));
+			dfbassert(ww->i_hvac.surface->Flip(ww->i_hvac.surface, NULL, DSFLIP_BLIT));
 		}
 		
 		{
-			dfbassert(surface_charge->Clear(surface_charge, 0, 0, 0xff, 0x1f));
+			dfbassert(ww->i_charging.surface->Clear(ww->i_charging.surface, 0, 0, 0xff, 0x1f));
 			if (charging)
 			{
-				dfbassert(surface_charge->SetColor(surface_charge, 0x80, 0xff, 0x20, 0xff));
-				dfbassert(surface_charge->SetFont(surface_charge, font_h4.dfbfont));
-				dfbassert(surface_charge->DrawString(surface_charge, "Charging", -1, winsize_charge.w / 2, font_h4.height, DSTF_CENTER));
+				dfbassert(ww->i_charging.surface->SetColor(ww->i_charging.surface, 0x80, 0xff, 0x20, 0xff));
+				dfbassert(ww->i_charging.surface->SetFont(ww->i_charging.surface, font_h4.dfbfont));
+				dfbassert(ww->i_charging.surface->DrawString(ww->i_charging.surface, "Charging", -1, ww->i_charging.sz.w / 2, font_h4.height, DSTF_CENTER));
 			}
-			dfbassert(surface_charge->Flip(surface_charge, NULL, DSFLIP_BLIT));
+			dfbassert(ww->i_charging.surface->Flip(ww->i_charging.surface, NULL, DSFLIP_BLIT));
 		}
 		
 		{
 			snprintf(buf, sizeof(buf), "%02u", humidity / 10);
-			dfbassert(surface->Clear(surface_humidity, 0xff, 0, 0, 0x1f));
-			dfbassert(surface->SetColor(surface_humidity, 0x80, 0xff, 0x20, 0xff));
-			dfbassert(surface->SetFont(surface_humidity, font_h2.dfbfont));
-			dfbassert(surface->DrawString(surface_humidity, buf, -1, 0, font_h2.height, DSTF_LEFT));
-			dfbassert(surface->Flip(surface_humidity, NULL, DSFLIP_BLIT));
+			dfbassert(ww->humid.surface->Clear(ww->humid.surface, 0xff, 0, 0, 0x1f));
+			dfbassert(ww->humid.surface->SetColor(ww->humid.surface, 0x80, 0xff, 0x20, 0xff));
+			dfbassert(ww->humid.surface->SetFont(ww->humid.surface, font_h2.dfbfont));
+			dfbassert(ww->humid.surface->DrawString(ww->humid.surface, buf, -1, 0, font_h2.height, DSTF_LEFT));
+			dfbassert(ww->humid.surface->Flip(ww->humid.surface, NULL, DSFLIP_BLIT));
 		}
 		
 		snprintf(buf, sizeof(buf), "%2u", (unsigned)(fahrenheit / 1000));
 		
-		dfbassert(surface->Clear(surface, 0, 0xff, 0, 0x1f));
-		dfbassert(surface->SetColor(surface, 0x80, 0xff, 0x20, 0xff));
-		dfbassert(surface->SetFont(surface, font_h2.dfbfont));
-		dfbassert(surface->DrawString(surface, buf, -1, winsize_temp.w, font_h2.height, DSTF_RIGHT));
-		dfbassert(surface->Flip(surface, NULL, DSFLIP_BLIT));
+		dfbassert(ww->temp.surface->Clear(ww->temp.surface, 0, 0xff, 0, 0x1f));
+		dfbassert(ww->temp.surface->SetColor(ww->temp.surface, 0x80, 0xff, 0x20, 0xff));
+		dfbassert(ww->temp.surface->SetFont(ww->temp.surface, font_h2.dfbfont));
+		dfbassert(ww->temp.surface->DrawString(ww->temp.surface, buf, -1, ww->temp.sz.w, font_h2.height, DSTF_RIGHT));
+		dfbassert(ww->temp.surface->Flip(ww->temp.surface, NULL, DSFLIP_BLIT));
 	}
 }
 
@@ -186,10 +187,10 @@ void goal_thread(void * const userp)
 	assert(!zmq_connect(client_tstat, "tcp://192.168.77.104:2931"));
 	assert(!zmq_setsockopt(client_tstat, ZMQ_SUBSCRIBE, NULL, 0));
 	
-	IDirectFBWindow * const window = userp;
-	IDirectFBSurface *surface;
-	DFBDimension winsize_tempgoal;
-	my_win_init(window, &surface, &winsize_tempgoal);
+	struct my_window_info tempgoal = {
+		.win = userp,
+	};
+	my_win_init(&tempgoal);
 	
 	zmq_pollitem_t pollitems[] = {
 		{ .socket = client_tstat, .events = ZMQ_POLLIN },
@@ -227,14 +228,14 @@ void goal_thread(void * const userp)
 		
 		snprintf(buf, sizeof(buf), "%2u", (unsigned)(fahrenheit_adjusted));
 		
-		dfbassert(surface->Clear(surface, 0, 0, 0xff, 0x1f));
+		dfbassert(tempgoal.surface->Clear(tempgoal.surface, 0, 0, 0xff, 0x1f));
 		if (fahrenheit_adjusted == fahrenheit_current)
-			dfbassert(surface->SetColor(surface, 0x80, 0xff, 0x20, 0xff));
+			dfbassert(tempgoal.surface->SetColor(tempgoal.surface, 0x80, 0xff, 0x20, 0xff));
 		else
-			dfbassert(surface->SetColor(surface, 0xff, 0x80, 0x20, 0xff));
-		dfbassert(surface->SetFont(surface, font_h4.dfbfont));
-		dfbassert(surface->DrawString(surface, buf, -1, winsize_tempgoal.w, font_h4.height, DSTF_RIGHT));
-		dfbassert(surface->Flip(surface, NULL, DSFLIP_BLIT));
+			dfbassert(tempgoal.surface->SetColor(tempgoal.surface, 0xff, 0x80, 0x20, 0xff));
+		dfbassert(tempgoal.surface->SetFont(tempgoal.surface, font_h4.dfbfont));
+		dfbassert(tempgoal.surface->DrawString(tempgoal.surface, buf, -1, tempgoal.sz.w, font_h4.height, DSTF_RIGHT));
+		dfbassert(tempgoal.surface->Flip(tempgoal.surface, NULL, DSFLIP_BLIT));
 	}
 }
 
@@ -336,12 +337,12 @@ int main(int argc, char **argv)
 		windesc.posy = (height / 2) - (font_h2.height - font_h2.ascender);
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		weather_windows = (struct weather_windows){
-			.temperature = window,
+			.temp.win = window,
 		};
 		
 		windesc.posx += windesc.width + font_h2.width_x;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
-		weather_windows.humidity = window;
+		weather_windows.humid.win = window;
 		windesc.posx -= windesc.width + font_h2.width_x;
 		
 		windesc.height = font_h4.height - font_h4.descender;
@@ -353,11 +354,11 @@ int main(int argc, char **argv)
 		windesc.posx = center_x - (windesc.width / 2);
 		windesc.posy += font_h4.height;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
-		weather_windows.hvac_indicator = window;
+		weather_windows.i_hvac.win = window;
 		
 		windesc.posy += font_h4.height;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
-		weather_windows.charging_indicator = window;
+		weather_windows.i_charging.win = window;
 		
 		zmq_threadstart(weather_thread, &weather_windows);
 	}
