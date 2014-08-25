@@ -76,6 +76,20 @@ struct weather_windows {
 };
 
 static
+void update_win_temp(struct my_window_info * const wi, const int32_t decicelcius)
+{
+	char buf[0x10];
+	int32_t fahrenheit = decicelcius_to_millifahrenheit(decicelcius);
+	snprintf(buf, sizeof(buf), "%2u", (unsigned)(fahrenheit / 1000));
+	
+	dfbassert(wi->surface->Clear(wi->surface, 0, 0xff, 0, 0x1f));
+	dfbassert(wi->surface->SetColor(wi->surface, 0x80, 0xff, 0x20, 0xff));
+	dfbassert(wi->surface->SetFont(wi->surface, font_h2.dfbfont));
+	dfbassert(wi->surface->DrawString(wi->surface, buf, -1, wi->sz.w, font_h2.height, DSTF_RIGHT));
+	dfbassert(wi->surface->Flip(wi->surface, NULL, DSFLIP_BLIT));
+}
+
+static
 void weather_thread(void * const userp)
 {
 	struct weather_windows * const ww = userp;
@@ -95,7 +109,7 @@ void weather_thread(void * const userp)
 	char buf[0x10];
 	bool fetstatus[PB_HVACWIRES___COUNT] = {true,true,true,true,true,true,true,true,true,true,true,true};
 	bool charging = false;
-	int32_t fahrenheit = 0;
+	int32_t decicelcius = 0;
 	unsigned humidity = 0;
 	while (true)
 	{
@@ -106,7 +120,7 @@ void weather_thread(void * const userp)
 		if (weather)
 		{
 			if (weather->has_temperature)
-				fahrenheit = decicelcius_to_millifahrenheit(weather->temperature);
+				decicelcius = weather->temperature;
 			if (weather->has_humidity)
 				humidity = weather->humidity;
 		}
@@ -154,13 +168,7 @@ void weather_thread(void * const userp)
 			dfbassert(ww->humid.surface->Flip(ww->humid.surface, NULL, DSFLIP_BLIT));
 		}
 		
-		snprintf(buf, sizeof(buf), "%2u", (unsigned)(fahrenheit / 1000));
-		
-		dfbassert(ww->temp.surface->Clear(ww->temp.surface, 0, 0xff, 0, 0x1f));
-		dfbassert(ww->temp.surface->SetColor(ww->temp.surface, 0x80, 0xff, 0x20, 0xff));
-		dfbassert(ww->temp.surface->SetFont(ww->temp.surface, font_h2.dfbfont));
-		dfbassert(ww->temp.surface->DrawString(ww->temp.surface, buf, -1, ww->temp.sz.w, font_h2.height, DSTF_RIGHT));
-		dfbassert(ww->temp.surface->Flip(ww->temp.surface, NULL, DSFLIP_BLIT));
+		update_win_temp(&ww->temp, decicelcius);
 	}
 }
 
