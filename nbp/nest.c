@@ -138,6 +138,7 @@ void nbp_got_message(struct nbp_device * const nbp, uint8_t * const buf, const s
 				nbp->temperature = temperature;
 				nbp->humidity = humidity;
 				nbp->last_weather_update = *now;
+				nbp->has_weather = true;
 				
 				if (nbp->cb_msg_weather)
 					nbp->cb_msg_weather(nbp, now, temperature, humidity);

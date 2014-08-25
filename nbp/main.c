@@ -127,10 +127,13 @@ void got_new_subscriber(void * const s, struct nbp_device * const nbp)
 	PbEvent pbevent = PB_EVENT__INIT;
 	
 	PbWeather pbweather = PB_WEATHER__INIT;
-	pbweather.has_temperature = true;
-	pbweather.temperature = nbp->temperature;
-	pbweather.has_humidity = true;
-	pbweather.humidity = nbp->humidity;
+	if (nbp->has_weather)
+	{
+		pbweather.has_temperature = true;
+		pbweather.temperature = nbp->temperature;
+		pbweather.has_humidity = true;
+		pbweather.humidity = nbp->humidity;
+	}
 	pbevent.weather = &pbweather;
 	
 	PbSetHVACWireRequest *pbwire = malloc(sizeof(*pbwire) * PB_HVACWIRES___COUNT);
