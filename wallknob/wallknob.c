@@ -37,6 +37,8 @@ struct my_font {
 };
 struct my_font font_h2, font_h4;
 
+static int temp_hysteresis;
+
 static
 void my_load_font(struct my_font * const myfont, const char * const fontname, const DFBFontDescription * const fontdsc)
 {
@@ -64,9 +66,15 @@ void my_win_init(struct my_window_info * const wininfo)
 }
 
 static inline
+int32_t decicelcius_to_millifahrenheit_delta(int32_t dc)
+{
+	return dc * 90 / 5;
+}
+
+static inline
 int32_t decicelcius_to_millifahrenheit(int32_t dc)
 {
-	return dc * 90 / 5 + 32000;
+	return decicelcius_to_millifahrenheit_delta(dc) + 32000;
 }
 
 struct weather_windows {
@@ -250,8 +258,8 @@ void update_win_circle(struct my_window_info * const wi, const int32_t current_t
 		double adjusted_goal_radian = my_temp_to_unit(adjusted_goal, units_min, units_around);
 		adjusted_goal_radian = (adjusted_goal_radian * radians_per_unit) + radian_offset;
 		dfbassert(wi->surface->SetColor(wi->surface, 0xff, 0xff, 0xff, 0xcf));
-		// FIXME: Use the hysteresis as width
-		my_draw_tick(wi->surface, center, r1, r3, radians_per_unit * 2, adjusted_goal_radian);
+		double temp_hysteresis_radians = radians_per_unit * decicelcius_to_millifahrenheit_delta(temp_hysteresis) / 1000.;
+		my_draw_tick(wi->surface, center, r1, r3, temp_hysteresis_radians * 2, adjusted_goal_radian);
 	}
 	
 	{
@@ -316,13 +324,18 @@ void tstat_recv(struct weather_windows * const ww, void * const client_tstat)
 	zmq_recv_protobuf(client_tstat, pb_event, pbevent, NULL);
 	
 	PbHVACGoals *goals = pbevent->hvacgoals;
-	if (goals && goals->has_temp_high)
+	if (goals)
 	{
-		current_goal = goals->temp_high;
-		if (!client_tstat_ctl)
-			init_client_tstat_ctl();
-		if (!adjusting)
-			update_win_tempgoal(&ww->tempgoal, current_goal, current_goal);
+		if (goals->has_temp_high)
+		{
+			current_goal = goals->temp_high;
+			if (!client_tstat_ctl)
+				init_client_tstat_ctl();
+			if (!adjusting)
+				update_win_tempgoal(&ww->tempgoal, current_goal, current_goal);
+		}
+		if (goals->has_temp_hysteresis)
+			temp_hysteresis = goals->temp_hysteresis;
 	}
 }
 
