@@ -116,6 +116,25 @@ void update_win_i_charging(struct my_window_info * const wi, const bool charging
 }
 
 static
+void update_win_i_hvac(struct my_window_info * const wi, const bool * const fetstatus)
+{
+	char buf[0x10];
+	if (fetstatus[PB_HVACWIRES__Y1])
+		snprintf(buf, sizeof(buf), "%s%s", fetstatus[PB_HVACWIRES__OB] ? "Cool" : "Heat", fetstatus[PB_HVACWIRES__G] ? "" : " (no fan)");
+	else
+	if (fetstatus[PB_HVACWIRES__G])
+		strcpy(buf, "Fan");
+	else
+		strcpy(buf, "Off");
+	
+	dfbassert(wi->surface->Clear(wi->surface, 0xff, 0, 0, 0x1f));
+	dfbassert(wi->surface->SetColor(wi->surface, 0x80, 0xff, 0x20, 0xff));
+	dfbassert(wi->surface->SetFont(wi->surface, font_h4.dfbfont));
+	dfbassert(wi->surface->DrawString(wi->surface, buf, -1, wi->sz.w / 2, font_h4.height, DSTF_CENTER));
+	dfbassert(wi->surface->Flip(wi->surface, NULL, DSFLIP_BLIT));
+}
+
+static
 void weather_thread(void * const userp)
 {
 	struct weather_windows * const ww = userp;
@@ -132,7 +151,6 @@ void weather_thread(void * const userp)
 	my_win_init(&ww->i_charging);
 	my_win_init(&ww->humid);
 	
-	char buf[0x10];
 	bool fetstatus[PB_HVACWIRES___COUNT] = {true,true,true,true,true,true,true,true,true,true,true,true};
 	bool charging = false;
 	int32_t decicelcius = 0;
@@ -156,24 +174,7 @@ void weather_thread(void * const userp)
 		if (pbevent->battery && pbevent->battery->has_charging)
 			charging = pbevent->battery->charging;
 		
-		{
-			if (fetstatus[PB_HVACWIRES__Y1])
-			{
-				snprintf(buf, sizeof(buf), "%s%s", fetstatus[PB_HVACWIRES__OB] ? "Cool" : "Heat", fetstatus[PB_HVACWIRES__G] ? "" : " (no fan)");
-			}
-			else
-			if (fetstatus[PB_HVACWIRES__G])
-				strcpy(buf, "Fan");
-			else
-				strcpy(buf, "Off");
-			
-			dfbassert(ww->i_hvac.surface->Clear(ww->i_hvac.surface, 0xff, 0, 0, 0x1f));
-			dfbassert(ww->i_hvac.surface->SetColor(ww->i_hvac.surface, 0x80, 0xff, 0x20, 0xff));
-			dfbassert(ww->i_hvac.surface->SetFont(ww->i_hvac.surface, font_h4.dfbfont));
-			dfbassert(ww->i_hvac.surface->DrawString(ww->i_hvac.surface, buf, -1, ww->i_hvac.sz.w / 2, font_h4.height, DSTF_CENTER));
-			dfbassert(ww->i_hvac.surface->Flip(ww->i_hvac.surface, NULL, DSFLIP_BLIT));
-		}
-		
+		update_win_i_hvac(&ww->i_hvac, fetstatus);
 		update_win_i_charging(&ww->i_charging, charging);
 		update_win_humid(&ww->humid, humidity);
 		update_win_temp(&ww->temp, decicelcius);
