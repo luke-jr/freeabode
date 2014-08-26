@@ -90,6 +90,26 @@ void update_win_temp(struct my_window_info * const wi, const int32_t decicelcius
 }
 
 static
+void update_win_tempgoal(struct my_window_info * const wi, int32_t current, int32_t adjusted)
+{
+	char buf[0x10];
+	
+	current  = decicelcius_to_millifahrenheit(current ) / 1000;
+	adjusted = decicelcius_to_millifahrenheit(adjusted) / 1000;
+	
+	snprintf(buf, sizeof(buf), "%2u", (unsigned)adjusted);
+	
+	dfbassert(wi->surface->Clear(wi->surface, 0, 0, 0xff, 0x1f));
+	if (adjusted == current)
+		dfbassert(wi->surface->SetColor(wi->surface, 0x80, 0xff, 0x20, 0xff));
+	else
+		dfbassert(wi->surface->SetColor(wi->surface, 0xff, 0x80, 0x20, 0xff));
+	dfbassert(wi->surface->SetFont(wi->surface, font_h4.dfbfont));
+	dfbassert(wi->surface->DrawString(wi->surface, buf, -1, wi->sz.w, font_h4.height, DSTF_RIGHT));
+	dfbassert(wi->surface->Flip(wi->surface, NULL, DSFLIP_BLIT));
+}
+
+static
 void update_win_humid(struct my_window_info * const wi, const unsigned humidity)
 {
 	char buf[0x10];
@@ -232,23 +252,7 @@ void goal_thread(void * const userp)
 		if (pollitems[1].revents & ZMQ_POLLIN)
 			read(adjusting_pipe[0], buf, sizeof(buf));
 		
-		int fahrenheit_current  = decicelcius_to_millifahrenheit(current_goal ) / 1000;
-		int fahrenheit_adjusted;
-		if (adjusting)
-			fahrenheit_adjusted = decicelcius_to_millifahrenheit(adjusted_goal) / 1000;
-		else
-			fahrenheit_adjusted = fahrenheit_current;
-		
-		snprintf(buf, sizeof(buf), "%2u", (unsigned)(fahrenheit_adjusted));
-		
-		dfbassert(tempgoal.surface->Clear(tempgoal.surface, 0, 0, 0xff, 0x1f));
-		if (fahrenheit_adjusted == fahrenheit_current)
-			dfbassert(tempgoal.surface->SetColor(tempgoal.surface, 0x80, 0xff, 0x20, 0xff));
-		else
-			dfbassert(tempgoal.surface->SetColor(tempgoal.surface, 0xff, 0x80, 0x20, 0xff));
-		dfbassert(tempgoal.surface->SetFont(tempgoal.surface, font_h4.dfbfont));
-		dfbassert(tempgoal.surface->DrawString(tempgoal.surface, buf, -1, tempgoal.sz.w, font_h4.height, DSTF_RIGHT));
-		dfbassert(tempgoal.surface->Flip(tempgoal.surface, NULL, DSFLIP_BLIT));
+		update_win_tempgoal(&tempgoal, current_goal, adjusting ? adjusted_goal : current_goal);
 	}
 }
 
