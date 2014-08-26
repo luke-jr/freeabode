@@ -17,6 +17,22 @@ enum fabd_tristate {
 
 static const int int_one = 1;
 
+#define fabd_min(a, b)  \
+	({  \
+		__typeof__(a) _a = (a);  \
+		__typeof__(b) _b = (b);  \
+		_a < _b ? _a : _b;  \
+	})  \
+/* End of fabd_min */
+
+#define fabd_max(a, b)  \
+	({  \
+		__typeof__(a) _a = (a);  \
+		__typeof__(b) _b = (b);  \
+		_a > _b ? _a : _b;  \
+	})  \
+/* End of fabd_max */
+
 static inline
 uint8_t upk_u8(const void * const bufp, const int offset)
 {
