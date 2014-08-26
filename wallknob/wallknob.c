@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <math.h>
 #include <pthread.h>
 #include <stdbool.h>
 
@@ -74,6 +75,7 @@ struct weather_windows {
 	struct my_window_info humid;
 	struct my_window_info i_hvac;
 	struct my_window_info i_charging;
+	struct my_window_info circle;
 };
 
 static
@@ -156,7 +158,115 @@ void update_win_i_hvac(struct my_window_info * const wi, const bool * const fets
 }
 
 static
-void weather_recv(struct weather_windows * const ww, void * const client_weather)
+void my_draw_tick(IDirectFBSurface * const surface, const DFBPoint center, const double r1, const double r2, const double thickness, const double radian)
+{
+	double rx1, ry1, rx2, ry2;
+	
+	{
+		double x1, y1, x2, y2;
+		
+		rx1 = cos(radian);
+		ry1 = sin(radian);
+		x1 = center.x + r1 * rx1;
+		y1 = center.y + r1 * ry1;
+		x2 = center.x + r2 * rx1;
+		y2 = center.y + r2 * ry1;
+		
+		dfbassert(surface->DrawLine(surface, x1, y1, x2, y2));
+	}
+	
+	if (thickness <= 0)
+		return;
+	
+	const double thickness_2 = thickness / 2;
+	
+	rx1 = cos(radian - thickness_2);
+	ry1 = sin(radian - thickness_2);
+	rx2 = cos(radian + thickness_2);
+	ry2 = sin(radian + thickness_2);
+	
+	DFBTriangle t[2];
+	t[0] = (DFBTriangle){
+		.x1 = center.x + r1 * rx1,
+		.y1 = center.y + r1 * ry1,
+		.x2 = center.x + r1 * rx2,
+		.y2 = center.y + r1 * ry2,
+		.x3 = center.x + r2 * rx1,
+		.y3 = center.y + r2 * ry1,
+	};
+	t[1] = (DFBTriangle){
+		.x1 = t[0].x2,
+		.y1 = t[0].y2,
+		.x2 = t[0].x3,
+		.y2 = t[0].y3,
+		.x3 = center.x + r2 * rx2,
+		.y3 = center.y + r2 * ry2,
+	};
+	dfbassert(surface->FillTriangles(surface, t, sizeof(t) / sizeof(*t)));
+}
+
+static
+void my_draw_coloured_tick(IDirectFBSurface * const surface, const DFBPoint center, const double r1, const double r2, const double thickness, const double i, const int units_around, const double radians_per_unit, const double radian_offset)
+{
+	int red, blue;
+	red  = fabd_min(0xff, 0xff * i / (units_around / 2));
+	blue = fabd_min(0xff, 0xff * (units_around - i - 1) / (units_around / 2));
+	dfbassert(surface->SetColor(surface, red, 0, blue, 0xff));
+	my_draw_tick(surface, center, r1, r2, thickness, radians_per_unit * i + radian_offset);
+}
+
+static
+double my_temp_to_unit(const double temp, const double units_min, const double units_around)
+{
+	double r = ((double)decicelcius_to_millifahrenheit(temp)) / 1000. - units_min;
+	r = fmin(units_around, fmax(0, r));
+	return r;
+}
+
+static
+void update_win_circle(struct my_window_info * const wi, const int32_t current_temp, const int current_goal, const int adjusted_goal)
+{
+	const double radians_around = (M_PI * 2) - 1;
+	const double radians_omit = (M_PI * 2) - radians_around;
+	const double radians_omit_div2 = radians_omit / 2;
+	const int units_around = 50;
+	const double radians_per_unit = radians_around / (units_around - 1);
+	const double radian_offset = M_PI_2 + radians_omit_div2;
+	const int units_min = 40;
+	const int units_max = units_min + units_around;
+	
+	double r1 = wi->sz.w / 2;
+	double r2 = r1 - (r1 / 8);
+	double r3 = r2 - ((r1 - r2) / 2);
+	DFBPoint center = {
+		.x = wi->sz.w / 2,
+		.y = wi->sz.h / 2,
+	};
+	
+	dfbassert(wi->surface->Clear(wi->surface, 0xff, 0xff, 0xff, 0));
+	wi->surface->SetRenderOptions(wi->surface, DSRO_ANTIALIAS);
+	
+	{
+		double adjusted_goal_radian = my_temp_to_unit(adjusted_goal, units_min, units_around);
+		adjusted_goal_radian = (adjusted_goal_radian * radians_per_unit) + radian_offset;
+		dfbassert(wi->surface->SetColor(wi->surface, 0xff, 0xff, 0xff, 0xcf));
+		// FIXME: Use the hysteresis as width
+		my_draw_tick(wi->surface, center, r1, r3, radians_per_unit * 2, adjusted_goal_radian);
+	}
+	
+	{
+		double current_temp_unit = my_temp_to_unit(current_temp, units_min, units_around);
+		my_draw_coloured_tick(wi->surface, center, r1, r3, radians_per_unit / 4, current_temp_unit, units_around, radians_per_unit, radian_offset);
+	}
+	
+	for (int i = 0; i < units_around; ++i)
+		my_draw_coloured_tick(wi->surface, center, r1, r2, radians_per_unit / 8, i, units_around, radians_per_unit, radian_offset);
+	
+	dfbassert(wi->surface->Flip(wi->surface, NULL, DSFLIP_BLIT));
+}
+
+static
+void weather_recv(struct weather_windows * const ww, void * const client_weather, int32_t * const current_temp_p)
 {
 	static bool fetstatus[PB_HVACWIRES___COUNT] = {true,true,true,true,true,true,true,true,true,true,true,true};
 	
@@ -167,7 +277,10 @@ void weather_recv(struct weather_windows * const ww, void * const client_weather
 	if (weather)
 	{
 		if (weather->has_temperature)
+		{
+			*current_temp_p = weather->temperature;
 			update_win_temp(&ww->temp, weather->temperature);
+		}
 		if (weather->has_humidity)
 			update_win_humid(&ww->humid, weather->humidity);
 	}
@@ -218,6 +331,7 @@ void weather_thread(void * const userp)
 	my_win_init(&ww->i_hvac);
 	my_win_init(&ww->i_charging);
 	my_win_init(&ww->humid);
+	my_win_init(&ww->circle);
 	
 	zmq_pollitem_t pollitems[] = {
 		{ .socket = client_tstat, .events = ZMQ_POLLIN },
@@ -226,6 +340,7 @@ void weather_thread(void * const userp)
 	};
 	
 	char buf[0x10];
+	int32_t current_temp = 0;
 	while (true)
 	{
 		if (zmq_poll(pollitems, sizeof(pollitems) / sizeof(*pollitems), -1) <= 0)
@@ -252,7 +367,9 @@ void weather_thread(void * const userp)
 			update_win_tempgoal(&ww->tempgoal, current_goal, adjusting ? adjusted_goal : current_goal);
 		}
 		if (pollitems[2].revents & ZMQ_POLLIN)
-			weather_recv(ww, client_weather);
+			weather_recv(ww, client_weather, &current_temp);
+		
+		update_win_circle(&ww->circle, current_temp, current_goal, adjusting ? adjusted_goal : current_goal);
 	}
 }
 
@@ -376,6 +493,12 @@ int main(int argc, char **argv)
 		windesc.posy += font_h4.height;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		weather_windows.i_charging.win = window;
+		
+		windesc.posx = windesc.posy = 0;
+		windesc.width = width;
+		windesc.height = height;
+		dfbassert(layer->CreateWindow(layer, &windesc, &window));
+		weather_windows.circle.win = window;
 		
 		zmq_threadstart(weather_thread, &weather_windows);
 	}
