@@ -70,6 +70,7 @@ int32_t decicelcius_to_millifahrenheit(int32_t dc)
 
 struct weather_windows {
 	struct my_window_info temp;
+	struct my_window_info tempgoal;
 	struct my_window_info humid;
 	struct my_window_info i_hvac;
 	struct my_window_info i_charging;
@@ -155,46 +156,30 @@ void update_win_i_hvac(struct my_window_info * const wi, const bool * const fets
 }
 
 static
-void weather_thread(void * const userp)
+void weather_recv(struct weather_windows * const ww, void * const client_weather)
 {
-	struct weather_windows * const ww = userp;
+	static bool fetstatus[PB_HVACWIRES___COUNT] = {true,true,true,true,true,true,true,true,true,true,true,true};
 	
-	void *client_weather;
-	client_weather = zmq_socket(my_zmq_context, ZMQ_SUB);
-	freeabode_zmq_security(client_weather, false);
-	assert(!zmq_connect(client_weather, "tcp://192.168.77.104:2929"));
-	assert(!zmq_setsockopt(client_weather, ZMQ_SUBSCRIBE, NULL, 0));
+	PbEvent *pbevent;
+	zmq_recv_protobuf(client_weather, pb_event, pbevent, NULL);
 	
-	
-	my_win_init(&ww->temp);
-	my_win_init(&ww->i_hvac);
-	my_win_init(&ww->i_charging);
-	my_win_init(&ww->humid);
-	
-	bool fetstatus[PB_HVACWIRES___COUNT] = {true,true,true,true,true,true,true,true,true,true,true,true};
-	while (true)
+	PbWeather *weather = pbevent->weather;
+	if (weather)
 	{
-		PbEvent *pbevent;
-		zmq_recv_protobuf(client_weather, pb_event, pbevent, NULL);
-		
-		PbWeather *weather = pbevent->weather;
-		if (weather)
-		{
-			if (weather->has_temperature)
-				update_win_temp(&ww->temp, weather->temperature);
-			if (weather->has_humidity)
-				update_win_humid(&ww->humid, weather->humidity);
-		}
-		if (pbevent->n_wire_change)
-		{
-			for (int i = 0; i < pbevent->n_wire_change; ++i)
-				if (pbevent->wire_change[i]->wire < PB_HVACWIRES___COUNT && pbevent->wire_change[i]->wire > 0)
-					fetstatus[pbevent->wire_change[i]->wire] = pbevent->wire_change[i]->connect;
-			update_win_i_hvac(&ww->i_hvac, fetstatus);
-		}
-		if (pbevent->battery && pbevent->battery->has_charging)
-			update_win_i_charging(&ww->i_charging, pbevent->battery->charging);
+		if (weather->has_temperature)
+			update_win_temp(&ww->temp, weather->temperature);
+		if (weather->has_humidity)
+			update_win_humid(&ww->humid, weather->humidity);
 	}
+	if (pbevent->n_wire_change)
+	{
+		for (int i = 0; i < pbevent->n_wire_change; ++i)
+			if (pbevent->wire_change[i]->wire < PB_HVACWIRES___COUNT && pbevent->wire_change[i]->wire > 0)
+				fetstatus[pbevent->wire_change[i]->wire] = pbevent->wire_change[i]->connect;
+		update_win_i_hvac(&ww->i_hvac, fetstatus);
+	}
+	if (pbevent->battery && pbevent->battery->has_charging)
+		update_win_i_charging(&ww->i_charging, pbevent->battery->charging);
 }
 
 static int current_goal;
@@ -212,22 +197,32 @@ void init_client_tstat_ctl()
 }
 
 static
-void goal_thread(void * const userp)
+void weather_thread(void * const userp)
 {
+	struct weather_windows * const ww = userp;
+	
 	void *client_tstat;
 	client_tstat = zmq_socket(my_zmq_context, ZMQ_SUB);
 	freeabode_zmq_security(client_tstat, false);
 	assert(!zmq_connect(client_tstat, "tcp://192.168.77.104:2931"));
 	assert(!zmq_setsockopt(client_tstat, ZMQ_SUBSCRIBE, NULL, 0));
 	
-	struct my_window_info tempgoal = {
-		.win = userp,
-	};
-	my_win_init(&tempgoal);
+	void *client_weather;
+	client_weather = zmq_socket(my_zmq_context, ZMQ_SUB);
+	freeabode_zmq_security(client_weather, false);
+	assert(!zmq_connect(client_weather, "tcp://192.168.77.104:2929"));
+	assert(!zmq_setsockopt(client_weather, ZMQ_SUBSCRIBE, NULL, 0));
+	
+	my_win_init(&ww->temp);
+	my_win_init(&ww->tempgoal);
+	my_win_init(&ww->i_hvac);
+	my_win_init(&ww->i_charging);
+	my_win_init(&ww->humid);
 	
 	zmq_pollitem_t pollitems[] = {
 		{ .socket = client_tstat, .events = ZMQ_POLLIN },
 		{ .fd = adjusting_pipe[0], .events = ZMQ_POLLIN },
+		{ .socket = client_weather, .events = ZMQ_POLLIN },
 	};
 	
 	char buf[0x10];
@@ -247,12 +242,17 @@ void goal_thread(void * const userp)
 				current_goal = goals->temp_high;
 				if (!client_tstat_ctl)
 					init_client_tstat_ctl();
+				if (!adjusting)
+					update_win_tempgoal(&ww->tempgoal, current_goal, current_goal);
 			}
 		}
 		if (pollitems[1].revents & ZMQ_POLLIN)
+		{
 			read(adjusting_pipe[0], buf, sizeof(buf));
-		
-		update_win_tempgoal(&tempgoal, current_goal, adjusting ? adjusted_goal : current_goal);
+			update_win_tempgoal(&ww->tempgoal, current_goal, adjusting ? adjusted_goal : current_goal);
+		}
+		if (pollitems[2].revents & ZMQ_POLLIN)
+			weather_recv(ww, client_weather);
 	}
 }
 
@@ -365,7 +365,7 @@ int main(int argc, char **argv)
 		windesc.height = font_h4.height - font_h4.descender;
 		windesc.posy += font_h2.height;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
-		zmq_threadstart(goal_thread, window);
+		weather_windows.tempgoal.win = window;
 		
 		windesc.width = width * 2 / 3;
 		windesc.posx = center_x - (windesc.width / 2);
