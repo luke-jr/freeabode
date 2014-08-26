@@ -103,6 +103,19 @@ void update_win_humid(struct my_window_info * const wi, const unsigned humidity)
 }
 
 static
+void update_win_i_charging(struct my_window_info * const wi, const bool charging)
+{
+	dfbassert(wi->surface->Clear(wi->surface, 0, 0, 0xff, 0x1f));
+	if (charging)
+	{
+		dfbassert(wi->surface->SetColor(wi->surface, 0x80, 0xff, 0x20, 0xff));
+		dfbassert(wi->surface->SetFont(wi->surface, font_h4.dfbfont));
+		dfbassert(wi->surface->DrawString(wi->surface, "Charging", -1, wi->sz.w / 2, font_h4.height, DSTF_CENTER));
+	}
+	dfbassert(wi->surface->Flip(wi->surface, NULL, DSFLIP_BLIT));
+}
+
+static
 void weather_thread(void * const userp)
 {
 	struct weather_windows * const ww = userp;
@@ -161,17 +174,7 @@ void weather_thread(void * const userp)
 			dfbassert(ww->i_hvac.surface->Flip(ww->i_hvac.surface, NULL, DSFLIP_BLIT));
 		}
 		
-		{
-			dfbassert(ww->i_charging.surface->Clear(ww->i_charging.surface, 0, 0, 0xff, 0x1f));
-			if (charging)
-			{
-				dfbassert(ww->i_charging.surface->SetColor(ww->i_charging.surface, 0x80, 0xff, 0x20, 0xff));
-				dfbassert(ww->i_charging.surface->SetFont(ww->i_charging.surface, font_h4.dfbfont));
-				dfbassert(ww->i_charging.surface->DrawString(ww->i_charging.surface, "Charging", -1, ww->i_charging.sz.w / 2, font_h4.height, DSTF_CENTER));
-			}
-			dfbassert(ww->i_charging.surface->Flip(ww->i_charging.surface, NULL, DSFLIP_BLIT));
-		}
-		
+		update_win_i_charging(&ww->i_charging, charging);
 		update_win_humid(&ww->humid, humidity);
 		update_win_temp(&ww->temp, decicelcius);
 	}
