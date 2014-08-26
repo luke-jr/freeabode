@@ -310,6 +310,23 @@ void init_client_tstat_ctl()
 }
 
 static
+void tstat_recv(struct weather_windows * const ww, void * const client_tstat)
+{
+	PbEvent *pbevent;
+	zmq_recv_protobuf(client_tstat, pb_event, pbevent, NULL);
+	
+	PbHVACGoals *goals = pbevent->hvacgoals;
+	if (goals && goals->has_temp_high)
+	{
+		current_goal = goals->temp_high;
+		if (!client_tstat_ctl)
+			init_client_tstat_ctl();
+		if (!adjusting)
+			update_win_tempgoal(&ww->tempgoal, current_goal, current_goal);
+	}
+}
+
+static
 void weather_thread(void * const userp)
 {
 	struct weather_windows * const ww = userp;
@@ -347,20 +364,7 @@ void weather_thread(void * const userp)
 			continue;
 		
 		if (pollitems[0].revents & ZMQ_POLLIN)
-		{
-			PbEvent *pbevent;
-			zmq_recv_protobuf(client_tstat, pb_event, pbevent, NULL);
-			
-			PbHVACGoals *goals = pbevent->hvacgoals;
-			if (goals && goals->has_temp_high)
-			{
-				current_goal = goals->temp_high;
-				if (!client_tstat_ctl)
-					init_client_tstat_ctl();
-				if (!adjusting)
-					update_win_tempgoal(&ww->tempgoal, current_goal, current_goal);
-			}
-		}
+			tstat_recv(ww, client_tstat);
 		if (pollitems[1].revents & ZMQ_POLLIN)
 		{
 			read(adjusting_pipe[0], buf, sizeof(buf));
