@@ -152,9 +152,6 @@ void weather_thread(void * const userp)
 	my_win_init(&ww->humid);
 	
 	bool fetstatus[PB_HVACWIRES___COUNT] = {true,true,true,true,true,true,true,true,true,true,true,true};
-	bool charging = false;
-	int32_t decicelcius = 0;
-	unsigned humidity = 0;
 	while (true)
 	{
 		PbEvent *pbevent;
@@ -164,20 +161,19 @@ void weather_thread(void * const userp)
 		if (weather)
 		{
 			if (weather->has_temperature)
-				decicelcius = weather->temperature;
+				update_win_temp(&ww->temp, weather->temperature);
 			if (weather->has_humidity)
-				humidity = weather->humidity;
+				update_win_humid(&ww->humid, weather->humidity);
 		}
-		for (int i = 0; i < pbevent->n_wire_change; ++i)
-			if (pbevent->wire_change[i]->wire < PB_HVACWIRES___COUNT && pbevent->wire_change[i]->wire > 0)
-			fetstatus[pbevent->wire_change[i]->wire] = pbevent->wire_change[i]->connect;
+		if (pbevent->n_wire_change)
+		{
+			for (int i = 0; i < pbevent->n_wire_change; ++i)
+				if (pbevent->wire_change[i]->wire < PB_HVACWIRES___COUNT && pbevent->wire_change[i]->wire > 0)
+					fetstatus[pbevent->wire_change[i]->wire] = pbevent->wire_change[i]->connect;
+			update_win_i_hvac(&ww->i_hvac, fetstatus);
+		}
 		if (pbevent->battery && pbevent->battery->has_charging)
-			charging = pbevent->battery->charging;
-		
-		update_win_i_hvac(&ww->i_hvac, fetstatus);
-		update_win_i_charging(&ww->i_charging, charging);
-		update_win_humid(&ww->humid, humidity);
-		update_win_temp(&ww->temp, decicelcius);
+			update_win_i_charging(&ww->i_charging, pbevent->battery->charging);
 	}
 }
 
