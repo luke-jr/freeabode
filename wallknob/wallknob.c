@@ -12,6 +12,7 @@
 #include <freeabode/util.h>
 
 enum temperature_units {
+	FTU_CELCIUS,
 	FTU_FAHRENHEIT,
 };
 
@@ -98,6 +99,9 @@ void update_win_temp(struct my_window_info * const wi, const int32_t decicelcius
 	char buf[0x10];
 	switch (temperature_units)
 	{
+		case FTU_CELCIUS:
+			snprintf(buf, sizeof(buf), "%2u", (unsigned)(decicelcius / 100));
+			break;
 		case FTU_FAHRENHEIT:
 		{
 			int32_t fahrenheit = decicelcius_to_millifahrenheit(decicelcius);
@@ -120,6 +124,12 @@ void update_win_tempgoal(struct my_window_info * const wi, int32_t current, int3
 	
 	switch (temperature_units)
 	{
+		case FTU_CELCIUS:
+			current /= 100;
+			adjusted /= 100;
+			snprintf(buf, sizeof(buf), "%2u", (unsigned)adjusted);
+			break;
+		
 		case FTU_FAHRENHEIT:
 			current  = decicelcius_to_millifahrenheit(current ) / 1000;
 			adjusted = decicelcius_to_millifahrenheit(adjusted) / 1000;
@@ -247,6 +257,9 @@ double my_temp_to_unit(const double temp, const double units_min, const double u
 	double r;
 	switch (temperature_units)
 	{
+		case FTU_CELCIUS:
+			r = ((double)temp) / 100. - units_min;
+			break;
 		case FTU_FAHRENHEIT:
 			r = ((double)decicelcius_to_millifahrenheit(temp)) / 1000. - units_min;
 			break;
@@ -267,6 +280,11 @@ void update_win_circle(struct my_window_info * const wi, const int32_t current_t
 	
 	switch (temperature_units)
 	{
+		case FTU_CELCIUS:
+			units_around = 30;
+			units_min = 2;
+			hysteresis_unit = (double)temp_hysteresis / 100.;
+			break;
 		case FTU_FAHRENHEIT:
 			units_around = 50;
 			units_min = 40;
