@@ -335,7 +335,7 @@ void update_win_circle(struct my_window_info * const wi, const int32_t current_t
 	const double radians_omit = (M_PI * 2) - radians_around;
 	const double radians_omit_div2 = radians_omit / 2;
 	const double radian_offset = M_PI_2 + radians_omit_div2;
-	int units_around, units_min;
+	int units_around, units_min, units_base = 10, units_halfbase = 5;
 	double hysteresis_unit;
 	
 	switch (temperature_units)
@@ -354,6 +354,8 @@ void update_win_circle(struct my_window_info * const wi, const int32_t current_t
 			units_around = 0x40;
 			units_min = 0x10;
 			hysteresis_unit = (double)centicelcius_to_tempmill(temp_hysteresis) / 0x100;
+			units_base = 0x10;
+			units_halfbase = 8;
 			break;
 	}
 	
@@ -362,6 +364,8 @@ void update_win_circle(struct my_window_info * const wi, const int32_t current_t
 	double r1 = wi->sz.w / 2;
 	double r2 = r1 - (r1 / 8);
 	double r3 = r2 - ((r1 - r2) / 2);
+	double r4 = r2 - (r1 - r2);
+	double r5 = r2 - ((r1 - r2) / 4);
 	DFBPoint center = {
 		.x = wi->sz.w / 2,
 		.y = wi->sz.h / 2,
@@ -380,11 +384,22 @@ void update_win_circle(struct my_window_info * const wi, const int32_t current_t
 	
 	{
 		double current_temp_unit = my_temp_to_unit(current_temp, units_min, units_around);
-		my_draw_coloured_tick(wi->surface, center, r1, r3, radians_per_unit / 4, current_temp_unit, units_around, radians_per_unit, radian_offset);
+		my_draw_coloured_tick(wi->surface, center, r1, r4, radians_per_unit / 2, current_temp_unit, units_around, radians_per_unit, radian_offset);
 	}
 	
 	for (int i = 0; i < units_around; ++i)
-		my_draw_coloured_tick(wi->surface, center, r1, r2, radians_per_unit / 8, i, units_around, radians_per_unit, radian_offset);
+	{
+		double rn;
+		int ix = (units_min + i) % units_base;
+		if (!ix)
+			rn = r3;
+		else
+		if (ix == units_halfbase)
+			rn = r5;
+		else
+			rn = r2;
+		my_draw_coloured_tick(wi->surface, center, r1, rn, radians_per_unit / 8, i, units_around, radians_per_unit, radian_offset);
+	}
 	
 	dfbassert(wi->surface->Flip(wi->surface, NULL, DSFLIP_BLIT));
 }
