@@ -73,15 +73,15 @@ void my_win_init(struct my_window_info * const wininfo)
 }
 
 static inline
-int32_t decicelcius_to_millifahrenheit_delta(int32_t dc)
+int32_t centicelcius_to_millifahrenheit_delta(int32_t cc)
 {
-	return dc * 90 / 5;
+	return cc * 90 / 5;
 }
 
 static inline
-int32_t decicelcius_to_millifahrenheit(int32_t dc)
+int32_t centicelcius_to_millifahrenheit(int32_t cc)
 {
-	return decicelcius_to_millifahrenheit_delta(dc) + 32000;
+	return centicelcius_to_millifahrenheit_delta(cc) + 32000;
 }
 
 struct weather_windows {
@@ -94,17 +94,17 @@ struct weather_windows {
 };
 
 static
-void update_win_temp(struct my_window_info * const wi, const int32_t decicelcius)
+void update_win_temp(struct my_window_info * const wi, const int32_t centicelcius)
 {
 	char buf[0x10];
 	switch (temperature_units)
 	{
 		case FTU_CELCIUS:
-			snprintf(buf, sizeof(buf), "%2u", (unsigned)(decicelcius / 100));
+			snprintf(buf, sizeof(buf), "%2u", (unsigned)(centicelcius / 100));
 			break;
 		case FTU_FAHRENHEIT:
 		{
-			int32_t fahrenheit = decicelcius_to_millifahrenheit(decicelcius);
+			int32_t fahrenheit = centicelcius_to_millifahrenheit(centicelcius);
 			snprintf(buf, sizeof(buf), "%2u", (unsigned)(fahrenheit / 1000));
 			break;
 		}
@@ -131,8 +131,8 @@ void update_win_tempgoal(struct my_window_info * const wi, int32_t current, int3
 			break;
 		
 		case FTU_FAHRENHEIT:
-			current  = decicelcius_to_millifahrenheit(current ) / 1000;
-			adjusted = decicelcius_to_millifahrenheit(adjusted) / 1000;
+			current  = centicelcius_to_millifahrenheit(current ) / 1000;
+			adjusted = centicelcius_to_millifahrenheit(adjusted) / 1000;
 			
 			snprintf(buf, sizeof(buf), "%2u", (unsigned)adjusted);
 			break;
@@ -261,7 +261,7 @@ double my_temp_to_unit(const double temp, const double units_min, const double u
 			r = ((double)temp) / 100. - units_min;
 			break;
 		case FTU_FAHRENHEIT:
-			r = ((double)decicelcius_to_millifahrenheit(temp)) / 1000. - units_min;
+			r = ((double)centicelcius_to_millifahrenheit(temp)) / 1000. - units_min;
 			break;
 	}
 	r = fmin(units_around, fmax(0, r));
@@ -288,7 +288,7 @@ void update_win_circle(struct my_window_info * const wi, const int32_t current_t
 		case FTU_FAHRENHEIT:
 			units_around = 50;
 			units_min = 40;
-			hysteresis_unit = (double)decicelcius_to_millifahrenheit_delta(temp_hysteresis) / 1000.;
+			hysteresis_unit = (double)centicelcius_to_millifahrenheit_delta(temp_hysteresis) / 1000.;
 			break;
 	}
 	
