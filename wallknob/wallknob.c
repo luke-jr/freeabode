@@ -14,6 +14,7 @@
 enum temperature_units {
 	FTU_CELCIUS,
 	FTU_FAHRENHEIT,
+	FTU_TONAL,
 };
 
 static const enum temperature_units temperature_units = FTU_FAHRENHEIT;
@@ -84,6 +85,45 @@ int32_t centicelcius_to_millifahrenheit(int32_t cc)
 	return centicelcius_to_millifahrenheit_delta(cc) + 32000;
 }
 
+static inline
+int32_t centicelcius_to_tempmill(const int32_t cc)
+{
+	return cc * 0x1000 / 625;
+}
+
+static
+void tonalstr(char *buf, size_t bufsz, int32_t n)
+{
+	bool leadingzero = true;
+	for (int i = 0xc; ; i -= 4)
+	{
+		int c = (n >> i) & 0xf;
+		if ((!c) && leadingzero && i)
+			continue;
+		leadingzero = false;
+		if (c < 9)
+		{
+			if (bufsz <= 1)
+				break;
+			*(buf++) = '0' + c;
+			--bufsz;
+		}
+		else
+		{
+			if (bufsz <= 3)
+				break;
+			*(buf++) = '\xee';
+			*(buf++) = '\xa3';
+			*(buf++) = '\xa0' + c;
+			bufsz -= 3;
+		}
+		
+		if (!i)
+			break;
+	}
+	buf[0] = '\0';
+}
+
 struct weather_windows {
 	struct my_window_info temp;
 	struct my_window_info tempgoal;
@@ -106,6 +146,12 @@ void update_win_temp(struct my_window_info * const wi, const int32_t centicelciu
 		{
 			int32_t fahrenheit = centicelcius_to_millifahrenheit(centicelcius);
 			snprintf(buf, sizeof(buf), "%2u", (unsigned)(fahrenheit / 1000));
+			break;
+		}
+		case FTU_TONAL:
+		{
+			int32_t temps = centicelcius_to_tempmill(centicelcius) / 0x100;
+			tonalstr(buf, sizeof(buf), temps);
 			break;
 		}
 	}
@@ -135,6 +181,13 @@ void update_win_tempgoal(struct my_window_info * const wi, int32_t current, int3
 			adjusted = centicelcius_to_millifahrenheit(adjusted) / 1000;
 			
 			snprintf(buf, sizeof(buf), "%2u", (unsigned)adjusted);
+			break;
+		
+		case FTU_TONAL:
+			current  = centicelcius_to_tempmill(current ) / 0x100;
+			adjusted = centicelcius_to_tempmill(adjusted) / 0x100;
+			
+			tonalstr(buf, sizeof(buf), adjusted);
 			break;
 	}
 	
@@ -263,6 +316,9 @@ double my_temp_to_unit(const double temp, const double units_min, const double u
 		case FTU_FAHRENHEIT:
 			r = ((double)centicelcius_to_millifahrenheit(temp)) / 1000. - units_min;
 			break;
+		case FTU_TONAL:
+			r = ((double)centicelcius_to_tempmill(temp)) / 0x100 - units_min;
+			break;
 	}
 	r = fmin(units_around, fmax(0, r));
 	return r;
@@ -289,6 +345,11 @@ void update_win_circle(struct my_window_info * const wi, const int32_t current_t
 			units_around = 50;
 			units_min = 40;
 			hysteresis_unit = (double)centicelcius_to_millifahrenheit_delta(temp_hysteresis) / 1000.;
+			break;
+		case FTU_TONAL:
+			units_around = 0x40;
+			units_min = 0x10;
+			hysteresis_unit = (double)centicelcius_to_tempmill(temp_hysteresis) / 0x100;
 			break;
 	}
 	
