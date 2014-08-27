@@ -205,7 +205,11 @@ static
 void update_win_humid(struct my_window_info * const wi, const unsigned humidity)
 {
 	char buf[0x10];
-	snprintf(buf, sizeof(buf), "%02u", humidity / 10);
+	
+	if (temperature_units != FTU_TONAL)
+		snprintf(buf, sizeof(buf), "%02u", humidity / 10);
+	else
+		tonalstr(buf, sizeof(buf), humidity * 0x20 / 125);
 	
 	dfbassert(wi->surface->Clear(wi->surface, 0xff, 0, 0, 0x1f));
 	dfbassert(wi->surface->SetColor(wi->surface, 0x80, 0xff, 0x20, 0xff));
