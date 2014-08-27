@@ -11,6 +11,12 @@
 #include <freeabode/security.h>
 #include <freeabode/util.h>
 
+enum temperature_units {
+	FTU_FAHRENHEIT,
+};
+
+static const enum temperature_units temperature_units = FTU_FAHRENHEIT;
+
 #define ADJUSTMENT_DELAY_SECS  1, 318
 #define FONT_NAME  "DroidSansMono.ttf"
 
@@ -90,8 +96,15 @@ static
 void update_win_temp(struct my_window_info * const wi, const int32_t decicelcius)
 {
 	char buf[0x10];
-	int32_t fahrenheit = decicelcius_to_millifahrenheit(decicelcius);
-	snprintf(buf, sizeof(buf), "%2u", (unsigned)(fahrenheit / 1000));
+	switch (temperature_units)
+	{
+		case FTU_FAHRENHEIT:
+		{
+			int32_t fahrenheit = decicelcius_to_millifahrenheit(decicelcius);
+			snprintf(buf, sizeof(buf), "%2u", (unsigned)(fahrenheit / 1000));
+			break;
+		}
+	}
 	
 	dfbassert(wi->surface->Clear(wi->surface, 0, 0xff, 0, 0x1f));
 	dfbassert(wi->surface->SetColor(wi->surface, 0x80, 0xff, 0x20, 0xff));
@@ -105,10 +118,15 @@ void update_win_tempgoal(struct my_window_info * const wi, int32_t current, int3
 {
 	char buf[0x10];
 	
-	current  = decicelcius_to_millifahrenheit(current ) / 1000;
-	adjusted = decicelcius_to_millifahrenheit(adjusted) / 1000;
-	
-	snprintf(buf, sizeof(buf), "%2u", (unsigned)adjusted);
+	switch (temperature_units)
+	{
+		case FTU_FAHRENHEIT:
+			current  = decicelcius_to_millifahrenheit(current ) / 1000;
+			adjusted = decicelcius_to_millifahrenheit(adjusted) / 1000;
+			
+			snprintf(buf, sizeof(buf), "%2u", (unsigned)adjusted);
+			break;
+	}
 	
 	dfbassert(wi->surface->Clear(wi->surface, 0, 0, 0xff, 0x1f));
 	if (adjusted == current)
@@ -226,7 +244,13 @@ void my_draw_coloured_tick(IDirectFBSurface * const surface, const DFBPoint cent
 static
 double my_temp_to_unit(const double temp, const double units_min, const double units_around)
 {
-	double r = ((double)decicelcius_to_millifahrenheit(temp)) / 1000. - units_min;
+	double r;
+	switch (temperature_units)
+	{
+		case FTU_FAHRENHEIT:
+			r = ((double)decicelcius_to_millifahrenheit(temp)) / 1000. - units_min;
+			break;
+	}
 	r = fmin(units_around, fmax(0, r));
 	return r;
 }
@@ -237,11 +261,20 @@ void update_win_circle(struct my_window_info * const wi, const int32_t current_t
 	const double radians_around = (M_PI * 2) - 1;
 	const double radians_omit = (M_PI * 2) - radians_around;
 	const double radians_omit_div2 = radians_omit / 2;
-	const int units_around = 50;
-	const double radians_per_unit = radians_around / (units_around - 1);
 	const double radian_offset = M_PI_2 + radians_omit_div2;
-	const int units_min = 40;
-	const int units_max = units_min + units_around;
+	int units_around, units_min;
+	double hysteresis_unit;
+	
+	switch (temperature_units)
+	{
+		case FTU_FAHRENHEIT:
+			units_around = 50;
+			units_min = 40;
+			hysteresis_unit = (double)decicelcius_to_millifahrenheit_delta(temp_hysteresis) / 1000.;
+			break;
+	}
+	
+	const double radians_per_unit = radians_around / (units_around - 1);
 	
 	double r1 = wi->sz.w / 2;
 	double r2 = r1 - (r1 / 8);
@@ -258,7 +291,7 @@ void update_win_circle(struct my_window_info * const wi, const int32_t current_t
 		double adjusted_goal_radian = my_temp_to_unit(adjusted_goal, units_min, units_around);
 		adjusted_goal_radian = (adjusted_goal_radian * radians_per_unit) + radian_offset;
 		dfbassert(wi->surface->SetColor(wi->surface, 0xff, 0xff, 0xff, 0xcf));
-		double temp_hysteresis_radians = radians_per_unit * decicelcius_to_millifahrenheit_delta(temp_hysteresis) / 1000.;
+		double temp_hysteresis_radians = radians_per_unit * hysteresis_unit;
 		my_draw_tick(wi->surface, center, r1, r3, temp_hysteresis_radians * 2, adjusted_goal_radian);
 	}
 	
