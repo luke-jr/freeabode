@@ -324,7 +324,7 @@ double my_temp_to_unit(const double temp, const double units_min, const double u
 			r = ((double)centicelcius_to_tempmill(temp)) / 0x100 - units_min;
 			break;
 	}
-	r = fmin(units_around, fmax(0, r));
+	r = fmin(units_around-1, fmax(0, r));
 	return r;
 }
 
