@@ -13,6 +13,22 @@
 #include "util.h"
 #include "json.h"
 
+json_t *fabd_json_array(json_t * const j)
+{
+	if (json_is_array(j))
+		return json_incref(j);
+	
+	json_t *jj = json_array();
+	if (!jj)
+		return NULL;
+	if (json_array_append(jj, j))
+	{
+		json_decref(jj);
+		return NULL;
+	}
+	return jj;
+}
+
 static
 bool pb_is_optional_and_missing(const ProtobufCFieldDescriptor * const pbfield, void *_pb)
 {
