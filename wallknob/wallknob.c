@@ -18,7 +18,7 @@ enum temperature_units {
 	FTU_TONAL,
 };
 
-static const enum temperature_units temperature_units = FTU_FAHRENHEIT;
+static enum temperature_units temperature_units;
 
 #define ADJUSTMENT_DELAY_SECS  1, 318
 #define FONT_NAME  "DroidSansMono.ttf"
@@ -575,12 +575,29 @@ void handle_button_press()
 	// TODO
 }
 
+static
+enum temperature_units fabd_parse_units(const char * const s)
+{
+	switch (s ? s[0] : 0)
+	{
+		default:
+		case 'c':
+			return FTU_CELCIUS;
+		case 'f':
+			return FTU_FAHRENHEIT;
+		case 't':
+			return FTU_TONAL;
+	}
+}
+
 int main(int argc, char **argv)
 {
 	my_devid = fabd_common_argv(argc, argv, "wallknob");
 	load_freeabode_key();
 	my_zmq_context = zmq_ctx_new();
 	assert(!pipe(adjusting_pipe));
+	
+	temperature_units = fabd_parse_units(fabdcfg_device_getstr(my_devid, "units"));
 	
 	IDirectFBDisplayLayer *layer;
 	struct weather_windows weather_windows;
