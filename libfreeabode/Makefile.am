@@ -1,6 +1,7 @@
 lib_LTLIBRARIES = libfreeabode.la
 
 libfreeabode_la_SOURCES = \
+	fabdcfg.c \
 	logging.c \
 	security.c \
 	util.c
@@ -12,6 +13,7 @@ libfreeabode_la_LIBADD = $(LIBSODIUM_LIBS) $(LIBZMQ_LIBS) $(PROTOBUF_C_LIBS)
 libfreeabode_includedir = $(includedir)/freeabode
 libfreeabode_include_HEADERS = \
 	bytes.h \
+	fabdcfg.h \
 	logging.h \
 	security.h \
 	util.h  \
