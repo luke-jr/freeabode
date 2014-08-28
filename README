@@ -13,7 +13,7 @@ wallknob: DirectFB GUI for nbp and tstat, designed to fit on the Nest's circular
 Configuration
 -------------
 
-Create a directory named 'fabd_cfg' with at least a directory.json file. This file is intended to convey the overall layout of your FreeAbode network, and be mirrored across all FreeAbode nodes. FreeAbode components should never modify this file on their own. Right now, it contains a single "devices" Object, with a key for each device id. The value for the device id is itself an Object with at least the following keys:
+Create a directory named 'fabd_cfg' with at least a directory.json file. This file is intended to convey the overall layout of your FreeAbode network, and be mirrored across all FreeAbode nodes. FreeAbode components should never modify this file on their own. Right now, it contains a "devices" Object, with a key for each device id. The value for the device id is itself an Object with at least the following keys:
 
 node (String): IP address or valid hostname this compoennt runs on (use /etc/hosts or DNS if you want to name it nicely)
 
@@ -22,8 +22,10 @@ type (String): Protocol this component is intended to speak. Currently, this is 
 servers (Object): Each interface supported by the component (the keys) must specify how it is to be exposed (the values). If the value is an Array, it is simply a list of Strings with ZeroMQ bind endpoints. If it is an Object, it may contain two keys of its own: 'bind' (to specify the Array of bind endpoints) and 'connect' (which will be used by clients wishing to access the service). If 'connect' is not explicitly specified, FreeAbode will try to guess the most appropriate way to access the service based on its 'bind' endpoint(s).
 
 Example directory.json:
-
 {
+	"defaults": {
+		"units": "tonal",
+	},
 	"devices": {
 		"my_nbp": {
 			"node": "192.168.1.104",

@@ -77,7 +77,12 @@ json_t *fabdcfg_device_get(const char * const devid, const char * const key)
 	
 	if ( (j = json_object_get(my_directory, "devices")) )
 		if ( (j = json_object_get(j, devid)) )
-			return json_object_get(j, key);
+			if ( (j = json_object_get(j, key)) )
+				return j;
+	
+	if ( (j = json_object_get(my_directory, "defaults")) )
+		if ( (j = json_object_get(j, key)) )
+			return j;
 	
 	return NULL;
 }
