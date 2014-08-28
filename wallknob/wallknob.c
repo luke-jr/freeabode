@@ -7,6 +7,7 @@
 #include <zmq.h>
 #include <zmq_utils.h>
 
+#include <freeabode/fabdcfg.h>
 #include <freeabode/freeabode.pb-c.h>
 #include <freeabode/security.h>
 #include <freeabode/util.h>
@@ -34,6 +35,7 @@ void dfbassert(DFBResult err, const char *file, int line, const char *expr)
 }
 #define dfbassert(expr)  dfbassert(expr, __FILE__, __LINE__, #expr)
 
+static const char *my_devid;
 static void *my_zmq_context;
 
 struct my_font {
@@ -445,7 +447,7 @@ void init_client_tstat_ctl()
 {
 	client_tstat_ctl = zmq_socket(my_zmq_context, ZMQ_REQ);
 	freeabode_zmq_security(client_tstat_ctl, false);
-	assert(!zmq_connect(client_tstat_ctl, "tcp://192.168.77.104:2932"));
+	assert(fabdcfg_zmq_connect(my_devid, "tstatctl", client_tstat_ctl));
 }
 
 static
@@ -478,13 +480,13 @@ void weather_thread(void * const userp)
 	void *client_tstat;
 	client_tstat = zmq_socket(my_zmq_context, ZMQ_SUB);
 	freeabode_zmq_security(client_tstat, false);
-	assert(!zmq_connect(client_tstat, "tcp://192.168.77.104:2931"));
+	assert(fabdcfg_zmq_connect(my_devid, "tstat", client_tstat));
 	assert(!zmq_setsockopt(client_tstat, ZMQ_SUBSCRIBE, NULL, 0));
 	
 	void *client_weather;
 	client_weather = zmq_socket(my_zmq_context, ZMQ_SUB);
 	freeabode_zmq_security(client_weather, false);
-	assert(!zmq_connect(client_weather, "tcp://192.168.77.104:2929"));
+	assert(fabdcfg_zmq_connect(my_devid, "weather", client_weather));
 	assert(!zmq_setsockopt(client_weather, ZMQ_SUBSCRIBE, NULL, 0));
 	
 	my_win_init(&ww->temp);
@@ -575,6 +577,7 @@ void handle_button_press()
 
 int main(int argc, char **argv)
 {
+	my_devid = fabd_common_argv(argc, argv, "wallknob");
 	load_freeabode_key();
 	my_zmq_context = zmq_ctx_new();
 	assert(!pipe(adjusting_pipe));
