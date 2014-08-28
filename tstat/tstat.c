@@ -8,6 +8,7 @@
 
 #include <zmq.h>
 
+#include <freeabode/fabdcfg.h>
 #include <freeabode/freeabode.pb-c.h>
 #include <freeabode/logging.h>
 #include <freeabode/security.h>
@@ -193,13 +194,7 @@ out:
 
 int main(int argc, char **argv)
 {
-	const char *myopt(int idx, const char *def)
-	{
-		if (idx >= argc)
-			return def;
-		return argv[idx];
-	}
-	
+	const char * const my_devid = fabd_common_argv(argc, argv, "tstat");
 	load_freeabode_key();
 	
 	void *my_zmq_context;
@@ -218,23 +213,21 @@ int main(int argc, char **argv)
 	
 	tstat->client_hwctl = zmq_socket(my_zmq_context, ZMQ_REQ);
 	freeabode_zmq_security(tstat->client_hwctl, false);
-	assert(!zmq_connect(tstat->client_hwctl, myopt(1, "ipc://nbp.ipc")));
+	assert(fabdcfg_zmq_connect(my_devid, "hwctl", tstat->client_hwctl));
 	
 	tstat->client_weather = zmq_socket(my_zmq_context, ZMQ_SUB);
 	freeabode_zmq_security(tstat->client_weather, false);
-	assert(!zmq_connect(tstat->client_weather, myopt(2, "ipc://weather.ipc")));
+	assert(fabdcfg_zmq_connect(my_devid, "weather", tstat->client_weather));
 	assert(!zmq_setsockopt(tstat->client_weather, ZMQ_SUBSCRIBE, NULL, 0));
 	
 	tstat->server_events = zmq_socket(my_zmq_context, ZMQ_XPUB);
 	freeabode_zmq_security(tstat->server_events, true);
 	zmq_setsockopt(tstat->server_events, ZMQ_XPUB_VERBOSE, &int_one, sizeof(int_one));
-	assert(!zmq_bind(tstat->server_events, "tcp://*:2931"));
-	assert(!zmq_bind(tstat->server_events, "ipc://tstat-events.ipc"));
+	assert(fabdcfg_zmq_bind(my_devid, "events", tstat->server_events));
 	
 	tstat->server_ctl = zmq_socket(my_zmq_context, ZMQ_REP);
 	freeabode_zmq_security(tstat->server_ctl, true);
-	assert(!zmq_bind(tstat->server_ctl, "tcp://*:2932"));
-	assert(!zmq_bind(tstat->server_ctl, "ipc://tstat-control.ipc"));
+	assert(fabdcfg_zmq_bind(my_devid, "control", tstat->server_ctl));
 	
 	zmq_pollitem_t pollitems[] = {
 		{ .socket = tstat->client_weather, .events = ZMQ_POLLIN },
