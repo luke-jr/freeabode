@@ -5,6 +5,7 @@
 
 #include <zmq.h>
 
+#include <freeabode/fabdcfg.h>
 #include <freeabode/freeabode.pb-c.h>
 #include <freeabode/logging.h>
 #include <freeabode/security.h>
@@ -13,6 +14,7 @@
 
 static const int periodic_req_interval = 30;
 
+static const char *my_devid;
 static void *my_zmq_context, *my_zmq_publisher;
 static struct timespec ts_next_periodic_req;
 
@@ -43,8 +45,7 @@ void reset_complete(struct nbp_device *nbp, const struct timespec *now, uint16_t
 	
 	request_periodic(nbp, now);
 	
-	assert(!zmq_bind(my_zmq_publisher, "tcp://*:2929"));
-	assert(!zmq_bind(my_zmq_publisher, "ipc://weather.ipc"));
+	assert(fabdcfg_zmq_bind(my_devid, "events", my_zmq_publisher));
 }
 
 void msg_log(struct nbp_device *nbp, const struct timespec *now, const char *msg)
@@ -175,9 +176,11 @@ out:
 
 int main(int argc, char **argv)
 {
+	my_devid = fabd_common_argv(argc, argv, "nbp");
 	load_freeabode_key();
 	
-	struct nbp_device *nbp = nbp_open("/dev/ttyO2");
+	const char * const nbp_ttypath = fabdcfg_device_getstr(my_devid, "backplate_device") ?: "/dev/ttyO2";
+	struct nbp_device *nbp = nbp_open(nbp_ttypath);
 	assert(nbp_send(nbp, NBPM_RESET, NULL, 0));
 #ifdef DEBUG_NBP
 	nbp->cb_msg = debug_msg;
@@ -193,8 +196,7 @@ int main(int argc, char **argv)
 	
 	void *my_zmq_ctl = zmq_socket(my_zmq_context, ZMQ_REP);
 	freeabode_zmq_security(my_zmq_ctl, true);
-	assert(!zmq_bind(my_zmq_ctl, "tcp://*:2930"));
-	assert(!zmq_bind(my_zmq_ctl, "ipc://nbp.ipc"));
+	assert(fabdcfg_zmq_bind(my_devid, "control", my_zmq_ctl));
 	
 	my_zmq_publisher = zmq_socket(my_zmq_context, ZMQ_XPUB);
 	zmq_setsockopt(my_zmq_publisher, ZMQ_XPUB_VERBOSE, &int_one, sizeof(int_one));
