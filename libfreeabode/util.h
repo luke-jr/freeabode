@@ -184,6 +184,8 @@ void pk_u64le(void * const bufp, const int offset, const uint64_t nv)
 	buf[offset+7] = (nv >> 0x38) & 0xff;
 }
 
+extern char *fabd_memndup(const void *, size_t);
+
 extern void bin2hex(char *, const void *, size_t);
 extern bool hex2bin(unsigned char *, const char *, size_t);
 

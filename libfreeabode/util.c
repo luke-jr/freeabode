@@ -6,6 +6,14 @@
 #include <strings.h>
 #include <sys/types.h>
 
+char *fabd_memndup(const void * const p, const size_t sz)
+{
+	char * const rv = malloc(sz + 1);
+	memcpy(rv, p, sz);
+	rv[sz] = '\0';
+	return rv;
+}
+
 static const char _hexchars[0x10] = "0123456789abcdef";
 
 void bin2hex(char *out, const void *in, size_t len)
