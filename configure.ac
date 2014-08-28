@@ -58,23 +58,8 @@ AC_ARG_WITH([directfb],
 )
 AM_CONDITIONAL([HAVE_DIRECTFB], [$have_directfb])
 
-have_jansson=true
-AC_ARG_WITH([jansson],
-	[AC_HELP_STRING([--without-jansson],[Build without JSON support via libjansson (default enabled)])],
-	[
-		if test x$withval = xyes; then
-			PKG_CHECK_MODULES([JANSSON], [jansson])
-		else
-			have_jansson=false
-		fi
-	],
-	[
-		PKG_CHECK_MODULES([JANSSON], [jansson],[],[
-			have_jansson=false
-		])
-	]
-)
-AM_CONDITIONAL([HAVE_JANSSON], [$have_jansson])
+PKG_CHECK_MODULES([JANSSON], [jansson])
+AM_CONDITIONAL([HAVE_JANSSON], [true])
 
 PKG_CHECK_MODULES([LIBSODIUM], [libsodium])
 PKG_CHECK_MODULES([LIBZMQ], [libzmq])
