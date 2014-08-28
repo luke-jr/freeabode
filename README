@@ -1,0 +1,70 @@
+Design
+------
+
+libfreeabode: General-purpose or otherwise shared code for FreeAbode components.
+
+nbp: Nest backplate interface.
+
+tstat: Thermostat logic; controls nbp intelligently.
+
+wallknob: DirectFB GUI for nbp and tstat, designed to fit on the Nest's circular display.
+
+
+Configuration
+-------------
+
+Create a directory named 'fabd_cfg' with at least a directory.json file. This file is intended to convey the overall layout of your FreeAbode network, and be mirrored across all FreeAbode nodes. FreeAbode components should never modify this file on their own. Right now, it contains a single "devices" Object, with a key for each device id. The value for the device id is itself an Object with at least the following keys:
+
+node (String): IP address or valid hostname this compoennt runs on (use /etc/hosts or DNS if you want to name it nicely)
+
+type (String): Protocol this component is intended to speak. Currently, this is "nbp" or "tstat".
+
+servers (Object): Each interface supported by the component (the keys) must specify how it is to be exposed (the values). If the value is an Array, it is simply a list of Strings with ZeroMQ bind endpoints. If it is an Object, it may contain two keys of its own: 'bind' (to specify the Array of bind endpoints) and 'connect' (which will be used by clients wishing to access the service). If 'connect' is not explicitly specified, FreeAbode will try to guess the most appropriate way to access the service based on its 'bind' endpoint(s).
+
+Example directory.json:
+
+{
+	"devices": {
+		"my_nbp": {
+			"node": "192.168.1.104",
+			"type": "nbp",
+			"servers": {
+				"control": ["ipc://nbp.ipc", "tcp://*:2930"],
+				"events": ["ipc://weather.ipc", "tcp://*:2929"]
+			}
+		},
+		"my_tstat": {
+			"node": "192.168.1.104",
+			"type": "tstat",
+			"servers": {
+				"control": ["ipc://tstat-control.ipc", "tcp://*:2932"],
+				"events": ["ipc://tstat-events.ipc", "tcp://*:2931"]
+			}
+		}
+	}
+}
+
+In addition to directory.json, each device has its own configuration file named the same as its device id key. This file contains settings privately used by the component, including its clients to other services. The component may rewrite the file as needed to save changes to settings.
+
+Example my_nbp.json:
+{
+	"backplate_device": "/dev/ttyO2"
+}
+
+Example my_tstat.json:
+{
+	"clients": {
+		"weather": "fabd:my_nbp/events",
+		"hwctl": "fabd:my_nbp/control"
+	}
+}
+
+Example wallknob.json (notice the 'type' key is included here since it is omitted from the directory):
+{
+	"type": "wallknob",
+	"clients": {
+		"weather": "fabd:my_nbp/events",
+		"tstat": "fabd:my_tstat/events",
+		"tstatctl": "fabd:my_tstat/control"
+	}
+}
