@@ -705,15 +705,32 @@ int main(int argc, char **argv)
 		}
 		dfbassert(evbuf->GetEvent(evbuf, &ev));
 		
-		if (ev.input.type == DIET_KEYPRESS && (ev.input.flags & DIEF_KEYID) && (ev.input.key_id == DIKI_LEFT || ev.input.key_id == DIKI_RIGHT))
+		if (ev.input.type == DIET_KEYPRESS && (ev.input.flags & DIEF_KEYID))
 		{
-			// Simulate knob turn for left/right arrow keys
-			ev.input.type = DIET_AXISMOTION;
-			ev.input.flags |= DIEF_AXISREL;
-			ev.input.axisrel = (ev.input.key_id == DIKI_LEFT) ? 4 : -4;
+			switch (ev.input.key_id)
+			{
+				case DIKI_LEFT:      case DIKI_RIGHT:
+					// Simulate knob turn for left/right arrow keys
+					ev.input.type = DIET_AXISMOTION;
+					ev.input.flags |= DIEF_AXISREL;
+					ev.input.axisrel = (ev.input.key_id == DIKI_LEFT) ? 4 : -4;
+					break;
+				case DIKI_ALT_L:     case DIKI_ALT_R:
+				case DIKI_CONTROL_L: case DIKI_CONTROL_R:
+				case DIKI_HYPER_L:   case DIKI_HYPER_R:
+				case DIKI_META_L:    case DIKI_META_R:
+				case DIKI_SHIFT_L:   case DIKI_SHIFT_R:
+				case DIKI_SUPER_L:   case DIKI_SUPER_R:
+					// Avoid triggering button presses for meta keys
+					goto ignore_event;
+				default:
+					break;
+			}
 		}
 		
 		current_event_handler(&ev);
+		
+ignore_event: ;
 	}
 }
 
@@ -734,7 +751,6 @@ void main_event_handler(DFBEvent * const ev)
 			
 			break;
 		case DIET_KEYPRESS:
-		case DIET_KEYRELEASE:
 			handle_button_press();
 			break;
 		default:
