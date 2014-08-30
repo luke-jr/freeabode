@@ -47,6 +47,9 @@ struct my_font {
 };
 struct my_font font_h2, font_h4;
 
+typedef void (*wallknob_event_handler_func)(DFBEvent *);
+wallknob_event_handler_func current_event_handler;
+
 static int temp_hysteresis;
 
 static
@@ -590,6 +593,8 @@ enum temperature_units fabd_parse_units(const char * const s)
 	}
 }
 
+static void main_event_handler(DFBEvent *);
+
 int main(int argc, char **argv)
 {
 	my_devid = fabd_common_argv(argc, argv, "wallknob");
@@ -671,6 +676,8 @@ int main(int argc, char **argv)
 		zmq_threadstart(weather_thread, &weather_windows);
 	}
 	
+	current_event_handler = main_event_handler;
+	
 	// Main thread now handles input
 	IDirectFBEventBuffer *evbuf;
 	DFBEvent ev;
@@ -697,42 +704,49 @@ int main(int argc, char **argv)
 			dfbassert(res);
 		}
 		dfbassert(evbuf->GetEvent(evbuf, &ev));
-		if (ev.clazz != DFEC_INPUT)
-			continue;
 		
-		switch (ev.input.type)
-		{
-			case DIET_AXISMOTION:
-				// Knob
-				if (!(ev.input.flags & DIEF_AXISREL))
-					break;
-				
-				handle_knob_turn(ev.input.axisrel);
-				
+		current_event_handler(&ev);
+	}
+}
+
+static
+void main_event_handler(DFBEvent * const ev)
+{
+	if (ev->clazz != DFEC_INPUT)
+		return;
+	
+	switch (ev->input.type)
+	{
+		case DIET_AXISMOTION:
+			// Knob
+			if (!(ev->input.flags & DIEF_AXISREL))
 				break;
-			case DIET_KEYPRESS:
-			case DIET_KEYRELEASE:
-				if (ev.input.flags & DIEF_KEYID)
+			
+			handle_knob_turn(ev->input.axisrel);
+			
+			break;
+		case DIET_KEYPRESS:
+		case DIET_KEYRELEASE:
+			if (ev->input.flags & DIEF_KEYID)
+			{
+				// Simulate knob turn for left/right arrow keys
+				if (ev->input.key_id == DIKI_LEFT)
 				{
-					// Simulate knob turn for left/right arrow keys
-					if (ev.input.key_id == DIKI_LEFT)
-					{
-						handle_knob_turn(4);
-						break;
-					}
-					else
-					if (ev.input.key_id == DIKI_RIGHT)
-					{
-						handle_knob_turn(-4);
-						break;
-					}
+					handle_knob_turn(4);
+					break;
 				}
-				
-				handle_button_press();
-				
-				break;
-			default:
-				break;
-		}
+				else
+				if (ev->input.key_id == DIKI_RIGHT)
+				{
+					handle_knob_turn(-4);
+					break;
+				}
+			}
+			
+			handle_button_press();
+			
+			break;
+		default:
+			break;
 	}
 }
