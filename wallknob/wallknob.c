@@ -705,6 +705,14 @@ int main(int argc, char **argv)
 		}
 		dfbassert(evbuf->GetEvent(evbuf, &ev));
 		
+		if (ev.input.type == DIET_KEYPRESS && (ev.input.flags & DIEF_KEYID) && (ev.input.key_id == DIKI_LEFT || ev.input.key_id == DIKI_RIGHT))
+		{
+			// Simulate knob turn for left/right arrow keys
+			ev.input.type = DIET_AXISMOTION;
+			ev.input.flags |= DIEF_AXISREL;
+			ev.input.axisrel = (ev.input.key_id == DIKI_LEFT) ? 4 : -4;
+		}
+		
 		current_event_handler(&ev);
 	}
 }
@@ -727,24 +735,7 @@ void main_event_handler(DFBEvent * const ev)
 			break;
 		case DIET_KEYPRESS:
 		case DIET_KEYRELEASE:
-			if (ev->input.flags & DIEF_KEYID)
-			{
-				// Simulate knob turn for left/right arrow keys
-				if (ev->input.key_id == DIKI_LEFT)
-				{
-					handle_knob_turn(4);
-					break;
-				}
-				else
-				if (ev->input.key_id == DIKI_RIGHT)
-				{
-					handle_knob_turn(-4);
-					break;
-				}
-			}
-			
 			handle_button_press();
-			
 			break;
 		default:
 			break;
