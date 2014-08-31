@@ -588,7 +588,7 @@ void handle_button_press()
 		"Thermostat",
 		"Settings",
 	};
-	int rv = fabdwk_textmenu(&top_wi, NULL, opts, sizeof(opts) / sizeof(*opts));
+	int rv = fabdwk_textmenu(&top_wi, NULL, opts, sizeof(opts) / sizeof(*opts), 0);
 	switch (rv)
 	{
 		case 0:
@@ -599,7 +599,7 @@ void handle_button_press()
 			const char * const settings[] = {
 				"Units",
 			};
-			rv = fabdwk_textmenu(&top_wi, "Settings", settings, sizeof(settings) / sizeof(*settings));
+			rv = fabdwk_textmenu(&top_wi, "Settings", settings, sizeof(settings) / sizeof(*settings), 0);
 			switch (rv)
 			{
 				case 0:  // Units
@@ -609,19 +609,7 @@ void handle_button_press()
 						"Fahrenheit",
 						"Tonal",
 					};
-					rv = fabdwk_textmenu(&top_wi, "Choose units to display:", choices, sizeof(choices) / sizeof(*choices));
-					switch (rv)
-					{
-						case 0:
-							temperature_units = FTU_CELCIUS;
-							break;
-						case 1:
-							temperature_units = FTU_FAHRENHEIT;
-							break;
-						case 2:
-							temperature_units = FTU_TONAL;
-							break;
-					}
+					temperature_units = fabdwk_textmenu(&top_wi, "Choose units to display:", choices, sizeof(choices) / sizeof(*choices), temperature_units);
 					write(redraw_pipe[1], "", 1);
 				}
 			}

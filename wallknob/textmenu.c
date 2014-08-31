@@ -50,7 +50,7 @@ void fabdwk_textmenu_draw(struct my_window_info * const wi, struct my_font * con
 	dfbassert(wi->surface->Flip(wi->surface, NULL, DSFLIP_BLIT));
 }
 
-int fabdwk_textmenu(struct my_window_info * const wi, const char * const prompt, const char * const * const opts, const int optcount)
+int fabdwk_textmenu(struct my_window_info * const wi, const char * const prompt, const char * const * const opts, const int optcount, const int defopt)
 {
 	struct my_font * const font = &font_h4;
 	double scroll = 1;
@@ -66,6 +66,7 @@ int fabdwk_textmenu(struct my_window_info * const wi, const char * const prompt,
 		}
 		const int center_y = wi->sz.h / 2;
 		scroll -= center_y / font->height;
+		scroll += defopt;
 	}
 	
 	DFBEvent ev;
