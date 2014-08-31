@@ -5,9 +5,8 @@
 #include "wallknob.h"
 
 static
-void fabdwk_textmenu_draw(struct my_window_info * const wi, const char * const prompt, const char * const * const opts, const int optcount, const double scroll, int * const out_sel)
+void fabdwk_textmenu_draw(struct my_window_info * const wi, struct my_font * const font, const char * const prompt, const char * const * const opts, const int optcount, const double scroll, int * const out_sel)
 {
-	struct my_font * const font = &font_h4;
 	dfbassert(wi->surface->Clear(wi->surface, 0xff, 0xff, 0xff, 0xff));
 	dfbassert(wi->surface->SetColor(wi->surface, 0, 0, 0, 0xff));
 	dfbassert(wi->surface->SetFont(wi->surface, font->dfbfont));
@@ -27,7 +26,7 @@ void fabdwk_textmenu_draw(struct my_window_info * const wi, const char * const p
 	for (int i = 0; i < optcount; ++i)
 		dfbassert(wi->surface->DrawString(wi->surface, opts[i], -1, center_x, (y += font->height), DSTF_CENTER));
 	
-	int best_opt = (center_y - first_opt_y1 + (font->height / 2)) / font->height;
+	int best_opt = (center_y - first_opt_y1) / font->height;
 	best_opt = fabd_min(optcount - 1, fabd_max(0, best_opt));
 	
 	y = first_opt_y1 + (font->height * best_opt);
@@ -53,11 +52,25 @@ void fabdwk_textmenu_draw(struct my_window_info * const wi, const char * const p
 
 int fabdwk_textmenu(struct my_window_info * const wi, const char * const prompt, const char * const * const opts, const int optcount)
 {
-	double scroll = 0;
+	struct my_font * const font = &font_h4;
+	double scroll = 1;
 	int sel;
+	
+	{
+		int linewidth, linechars;
+		const char *nextline;
+		for (const char *line = prompt; line && line[0]; line = nextline)
+		{
+			dfbassert(font->dfbfont->GetStringBreak(font->dfbfont, line, -1, wi->sz.w, &linewidth, &linechars, &nextline));
+			++scroll;
+		}
+		const int center_y = wi->sz.h / 2;
+		scroll -= center_y / font->height;
+	}
+	
 	DFBEvent ev;
 redraw: ;
-	fabdwk_textmenu_draw(wi, prompt, opts, optcount, scroll, &sel);
+	fabdwk_textmenu_draw(wi, font, prompt, opts, optcount, scroll, &sel);
 	while (true)
 	{
 		fabdwk_wait_for_event(&ev);
