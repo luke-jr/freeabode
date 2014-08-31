@@ -36,4 +36,6 @@ extern struct my_font font_h2, font_h4;
 
 extern void fabdwk_wait_for_event(DFBEvent *);
 
+extern int fabdwk_textmenu(struct my_window_info *, const char *prompt, const char * const *opts, int optcount);
+
 #endif

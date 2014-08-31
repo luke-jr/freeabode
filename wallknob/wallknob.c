@@ -557,10 +557,21 @@ void make_adjustments()
 	write(adjusting_pipe[1], "", 1);
 }
 
+static struct my_window_info top_wi;
+
 static
 void handle_button_press()
 {
-	// TODO
+	const char *opts[] = {
+		"Thermostat",
+	};
+	int rv = fabdwk_textmenu(&top_wi, NULL, opts, sizeof(opts) / sizeof(*opts));
+	switch (rv)
+	{
+		case 0:
+			// Thermostat selected, do nothing
+			break;
+	}
 }
 
 static
@@ -661,6 +672,12 @@ int main(int argc, char **argv)
 		weather_windows.circle.win = window;
 		
 		zmq_threadstart(weather_thread, &weather_windows);
+		
+		windesc.flags &= ~(DWDESC_CAPS | DWDESC_OPTIONS);
+		dfbassert(layer->CreateWindow(layer, &windesc, &window));
+		top_wi.win = window;
+		my_win_init(&top_wi);
+		dfbassert(top_wi.win->SetOpacity(top_wi.win, 0));
 	}
 	
 	current_event_handler = main_event_handler;
