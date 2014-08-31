@@ -593,7 +593,10 @@ enum temperature_units fabd_parse_units(const char * const s)
 	}
 }
 
+static void fabdwk_wait_for_event(DFBEvent *);
 static void main_event_handler(DFBEvent *);
+
+static IDirectFBEventBuffer *evbuf;
 
 int main(int argc, char **argv)
 {
@@ -679,58 +682,60 @@ int main(int argc, char **argv)
 	current_event_handler = main_event_handler;
 	
 	// Main thread now handles input
-	IDirectFBEventBuffer *evbuf;
 	DFBEvent ev;
 	dfbassert(dfb->CreateInputEventBuffer(dfb, DICAPS_ALL, DFB_TRUE, &evbuf));
 	while (true)
 	{
-		{
-			DFBResult res;
-			if (adjusting)
-			{
-				res = evbuf->WaitForEventWithTimeout(evbuf, ADJUSTMENT_DELAY_SECS);
-				if (res == DFB_TIMEOUT)
-				{
-					// Timeout occurred
-					make_adjustments();
-					continue;
-				}
-			}
-			else
-				res = evbuf->WaitForEvent(evbuf);
-			if (res == DFB_INTERRUPTED)
-				// Shouldn't happen, but does :(
-				continue;
-			dfbassert(res);
-		}
-		dfbassert(evbuf->GetEvent(evbuf, &ev));
-		
-		if (ev.input.type == DIET_KEYPRESS && (ev.input.flags & DIEF_KEYID))
-		{
-			switch (ev.input.key_id)
-			{
-				case DIKI_LEFT:      case DIKI_RIGHT:
-					// Simulate knob turn for left/right arrow keys
-					ev.input.type = DIET_AXISMOTION;
-					ev.input.flags |= DIEF_AXISREL;
-					ev.input.axisrel = (ev.input.key_id == DIKI_LEFT) ? 4 : -4;
-					break;
-				case DIKI_ALT_L:     case DIKI_ALT_R:
-				case DIKI_CONTROL_L: case DIKI_CONTROL_R:
-				case DIKI_HYPER_L:   case DIKI_HYPER_R:
-				case DIKI_META_L:    case DIKI_META_R:
-				case DIKI_SHIFT_L:   case DIKI_SHIFT_R:
-				case DIKI_SUPER_L:   case DIKI_SUPER_R:
-					// Avoid triggering button presses for meta keys
-					goto ignore_event;
-				default:
-					break;
-			}
-		}
-		
+		fabdwk_wait_for_event(&ev);
 		current_event_handler(&ev);
-		
-ignore_event: ;
+	}
+}
+
+void fabdwk_wait_for_event(DFBEvent * const ev)
+{
+retry: ;
+	{
+		DFBResult res;
+		if (adjusting)
+		{
+			res = evbuf->WaitForEventWithTimeout(evbuf, ADJUSTMENT_DELAY_SECS);
+			if (res == DFB_TIMEOUT)
+			{
+				// Timeout occurred
+				make_adjustments();
+				goto retry;
+			}
+		}
+		else
+			res = evbuf->WaitForEvent(evbuf);
+		if (res == DFB_INTERRUPTED)
+			// Shouldn't happen, but does :(
+			goto retry;
+		dfbassert(res);
+	}
+	dfbassert(evbuf->GetEvent(evbuf, ev));
+	
+	if (ev->input.type == DIET_KEYPRESS && (ev->input.flags & DIEF_KEYID))
+	{
+		switch (ev->input.key_id)
+		{
+			case DIKI_LEFT:      case DIKI_RIGHT:
+				// Simulate knob turn for left/right arrow keys
+				ev->input.type = DIET_AXISMOTION;
+				ev->input.flags |= DIEF_AXISREL;
+				ev->input.axisrel = (ev->input.key_id == DIKI_LEFT) ? 4 : -4;
+				break;
+			case DIKI_ALT_L:     case DIKI_ALT_R:
+			case DIKI_CONTROL_L: case DIKI_CONTROL_R:
+			case DIKI_HYPER_L:   case DIKI_HYPER_R:
+			case DIKI_META_L:    case DIKI_META_R:
+			case DIKI_SHIFT_L:   case DIKI_SHIFT_R:
+			case DIKI_SUPER_L:   case DIKI_SUPER_R:
+				// Avoid triggering button presses for meta keys
+				goto retry;
+			default:
+				break;
+		}
 	}
 }
 
