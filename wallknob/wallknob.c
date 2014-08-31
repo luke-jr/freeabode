@@ -21,6 +21,7 @@ enum temperature_units {
 };
 
 static enum temperature_units temperature_units;
+static int redraw_pipe[2];
 
 #define ADJUSTMENT_DELAY_SECS  1, 318
 #define FONT_NAME  "DroidSansMono.ttf"
@@ -395,7 +396,7 @@ void update_win_circle(struct my_window_info * const wi, const int32_t current_t
 }
 
 static
-void weather_recv(struct weather_windows * const ww, void * const client_weather, int32_t * const current_temp_p)
+void weather_recv(struct weather_windows * const ww, void * const client_weather, int32_t * const current_temp_p, unsigned *current_humidity)
 {
 	static bool fetstatus[PB_HVACWIRES___COUNT] = {true,true,true,true,true,true,true,true,true,true,true,true};
 	
@@ -411,7 +412,10 @@ void weather_recv(struct weather_windows * const ww, void * const client_weather
 			update_win_temp(&ww->temp, weather->temperature);
 		}
 		if (weather->has_humidity)
+		{
+			*current_humidity = weather->humidity;
 			update_win_humid(&ww->humid, weather->humidity);
+		}
 	}
 	if (pbevent->n_wire_change)
 	{
@@ -488,14 +492,25 @@ void weather_thread(void * const userp)
 		{ .socket = client_tstat, .events = ZMQ_POLLIN },
 		{ .fd = adjusting_pipe[0], .events = ZMQ_POLLIN },
 		{ .socket = client_weather, .events = ZMQ_POLLIN },
+		{ .fd = redraw_pipe[0], .events = ZMQ_POLLIN },
 	};
 	
 	char buf[0x10];
 	int32_t current_temp = 0;
+	unsigned current_humidity = 0;
 	while (true)
 	{
 		if (zmq_poll(pollitems, sizeof(pollitems) / sizeof(*pollitems), -1) <= 0)
 			continue;
+		
+		if (pollitems[3].revents & ZMQ_POLLIN)
+		{
+			read(redraw_pipe[0], buf, sizeof(buf));
+			
+			update_win_temp(&ww->temp, current_temp);
+			update_win_tempgoal(&ww->tempgoal, current_goal, adjusting ? adjusted_goal : current_goal);
+			update_win_humid(&ww->humid, current_humidity);
+		}
 		
 		if (pollitems[0].revents & ZMQ_POLLIN)
 			tstat_recv(ww, client_tstat);
@@ -505,7 +520,7 @@ void weather_thread(void * const userp)
 			update_win_tempgoal(&ww->tempgoal, current_goal, adjusting ? adjusted_goal : current_goal);
 		}
 		if (pollitems[2].revents & ZMQ_POLLIN)
-			weather_recv(ww, client_weather, &current_temp);
+			weather_recv(ww, client_weather, &current_temp, &current_humidity);
 		
 		update_win_circle(&ww->circle, current_temp, current_goal, adjusting ? adjusted_goal : current_goal);
 	}
@@ -564,6 +579,7 @@ void handle_button_press()
 {
 	const char *opts[] = {
 		"Thermostat",
+		"Settings",
 	};
 	int rv = fabdwk_textmenu(&top_wi, NULL, opts, sizeof(opts) / sizeof(*opts));
 	switch (rv)
@@ -571,6 +587,39 @@ void handle_button_press()
 		case 0:
 			// Thermostat selected, do nothing
 			break;
+		case 1:  // Settings
+		{
+			const char * const settings[] = {
+				"Units",
+			};
+			rv = fabdwk_textmenu(&top_wi, "Settings", settings, sizeof(settings) / sizeof(*settings));
+			switch (rv)
+			{
+				case 0:  // Units
+				{
+					const char * const choices[] = {
+						"Celcius",
+						"Fahrenheit",
+						"Tonal",
+					};
+					rv = fabdwk_textmenu(&top_wi, "Choose units to display:", choices, sizeof(choices) / sizeof(*choices));
+					switch (rv)
+					{
+						case 0:
+							temperature_units = FTU_CELCIUS;
+							break;
+						case 1:
+							temperature_units = FTU_FAHRENHEIT;
+							break;
+						case 2:
+							temperature_units = FTU_TONAL;
+							break;
+					}
+					write(redraw_pipe[1], "", 1);
+				}
+			}
+			break;
+		}
 	}
 }
 
@@ -599,6 +648,7 @@ int main(int argc, char **argv)
 	load_freeabode_key();
 	my_zmq_context = zmq_ctx_new();
 	assert(!pipe(adjusting_pipe));
+	assert(!pipe(redraw_pipe));
 	
 	temperature_units = fabd_parse_units(fabdcfg_device_getstr(my_devid, "units"));
 	
