@@ -12,6 +12,8 @@
 #include <freeabode/security.h>
 #include <freeabode/util.h>
 
+#include "wallknob.h"
+
 enum temperature_units {
 	FTU_CELCIUS,
 	FTU_FAHRENHEIT,
@@ -25,29 +27,19 @@ static enum temperature_units temperature_units;
 
 static IDirectFB *dfb;
 
-static
-void dfbassert(DFBResult err, const char *file, int line, const char *expr)
+void dfbassert_(DFBResult err, const char *file, int line, const char *expr)
 {
 	if (err == DFB_OK)
 		return;
 	fprintf(stderr, "%s:%d: ", file, line);
 	DirectFBErrorFatal(expr, err);
 }
-#define dfbassert(expr)  dfbassert(expr, __FILE__, __LINE__, #expr)
 
 static const char *my_devid;
 static void *my_zmq_context;
 
-struct my_font {
-	IDirectFBFont *dfbfont;
-	int height;
-	int ascender;
-	int descender;
-	int width_x;
-};
 struct my_font font_h2, font_h4;
 
-typedef void (*wallknob_event_handler_func)(DFBEvent *);
 wallknob_event_handler_func current_event_handler;
 
 static int temp_hysteresis;
@@ -62,13 +54,6 @@ void my_load_font(struct my_font * const myfont, const char * const fontname, co
 	dfbassert(myfont->dfbfont->GetStringWidth(myfont->dfbfont, "x", 1, &myfont->width_x));
 }
 
-struct my_window_info {
-	IDirectFBWindow *win;
-	IDirectFBSurface *surface;
-	DFBDimension sz;
-};
-
-static
 void my_win_init(struct my_window_info * const wininfo)
 {
 	dfbassert(wininfo->win->GetSurface(wininfo->win, &wininfo->surface));
@@ -593,7 +578,6 @@ enum temperature_units fabd_parse_units(const char * const s)
 	}
 }
 
-static void fabdwk_wait_for_event(DFBEvent *);
 static void main_event_handler(DFBEvent *);
 
 static IDirectFBEventBuffer *evbuf;
