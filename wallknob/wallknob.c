@@ -785,7 +785,16 @@ retry: ;
 				// Avoid triggering button presses for meta keys
 				goto retry;
 			default:
+			{
+				IDirectFBInputDevice *device;
+				DFBInputDeviceDescription devdesc;
+				dfbassert(dfb->GetInputDevice(dfb, ev->input.device_id, &device));
+				dfbassert(device->GetDescription(device, &devdesc));
+				if (!devdesc.type)
+					// Ignore key presses from devices of unknown type
+					goto retry;
 				break;
+			}
 		}
 	}
 }
