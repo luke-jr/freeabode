@@ -430,9 +430,16 @@ void weather_recv(struct weather_windows * const ww, void * const client_weather
 
 static int current_goal;
 static bool adjusting;
-static int adjusted_goal;
+static double adjusted_goal_hp;
 static int adjusting_pipe[2];
 static void *client_tstat_ctl;
+
+static inline
+int adjusted_goal_()
+{
+	return adjusted_goal_hp * 100.;
+}
+#define adjusted_goal  (adjusted_goal_())
 
 static
 void init_client_tstat_ctl()
@@ -535,9 +542,9 @@ void handle_knob_turn(const int axisrel)
 	if (!adjusting)
 	{
 		adjusting = true;
-		adjusted_goal = current_goal;
+		adjusted_goal_hp = current_goal / 100.;
 	}
-	adjusted_goal -= axisrel;
+	adjusted_goal_hp -= (double)axisrel / 0xd0;
 	write(adjusting_pipe[1], "", 1);
 }
 
@@ -774,7 +781,7 @@ retry: ;
 				// Simulate knob turn for left/right arrow keys
 				ev->input.type = DIET_AXISMOTION;
 				ev->input.flags |= DIEF_AXISREL;
-				ev->input.axisrel = (ev->input.key_id == DIKI_LEFT) ? 4 : -4;
+				ev->input.axisrel = (ev->input.key_id == DIKI_LEFT) ? 40 : -40;
 				break;
 			case DIKI_ALT_L:     case DIKI_ALT_R:
 			case DIKI_CONTROL_L: case DIKI_CONTROL_R:

@@ -71,7 +71,7 @@ redraw: ;
 				if (!(ev.input.flags & DIEF_AXISREL))
 					break;
 				
-				scroll -= (double)ev.input.axisrel / 0x10;
+				scroll -= (double)ev.input.axisrel / 0x100;
 				goto redraw;
 			case DIET_KEYPRESS:
 				goto done;
