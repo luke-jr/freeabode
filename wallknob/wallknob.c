@@ -2,6 +2,7 @@
 #include <math.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include <sys/time.h>
 
 #include <directfb.h>
 #include <zmq.h>
@@ -25,6 +26,8 @@ static int redraw_pipe[2];
 
 #define ADJUSTMENT_DELAY_SECS  1, 318
 #define FONT_NAME  "DroidSansMono.ttf"
+
+static const long nsec_to_timmill = 0x4e94914f;
 
 static IDirectFB *dfb;
 
@@ -116,6 +119,7 @@ void tonalstr(char *buf, size_t bufsz, int32_t n)
 }
 
 struct weather_windows {
+	struct my_window_info clock;
 	struct my_window_info temp;
 	struct my_window_info tempgoal;
 	struct my_window_info humid;
@@ -123,6 +127,45 @@ struct weather_windows {
 	struct my_window_info i_charging;
 	struct my_window_info circle;
 };
+
+static
+void update_clock(struct my_window_info * const wi, struct timespec *tsp_now, struct timespec *tsp_change)
+{
+	struct timeval tv;
+	struct tm tm;
+	long long nsecs_to_change;
+	char buf[0x10];
+	
+	if (gettimeofday(&tv, NULL))
+		return;
+	
+	if (temperature_units == FTU_TONAL)
+	{
+		if (!gmtime_r(&tv.tv_sec, &tm))
+			return;
+		long long daily_nsecs = (((((((long long)tm.tm_hour * 60) + tm.tm_min) * 60) + tm.tm_sec) * 1000000) + tv.tv_usec) * 1000;
+		unsigned long daily_timmills = daily_nsecs / nsec_to_timmill;
+		nsecs_to_change = nsec_to_timmill - (daily_nsecs % nsec_to_timmill);
+		tonalstr(buf, sizeof(buf), daily_timmills);
+	}
+	else
+	{
+		if (!localtime_r(&tv.tv_sec, &tm))
+			return;
+		nsecs_to_change = 60000000 - ((long)tv.tv_usec + (tm.tm_sec * 1000000));
+		nsecs_to_change *= 1000;
+		snprintf(buf, sizeof(buf), "%2d:%02d", tm.tm_hour, tm.tm_min);
+	}
+	
+	clock_gettime(CLOCK_MONOTONIC, tsp_now);
+	timespec_add_ns(tsp_now, nsecs_to_change, tsp_change);
+	
+	dfbassert(wi->surface->Clear(wi->surface, 0, 0, 0xff, 0x1f));
+	dfbassert(wi->surface->SetColor(wi->surface, 0x80, 0xff, 0x20, 0xff));
+	dfbassert(wi->surface->SetFont(wi->surface, font_h2.dfbfont));
+	dfbassert(wi->surface->DrawString(wi->surface, buf, -1, wi->sz.w / 2, font_h2.height, DSTF_CENTER));
+	dfbassert(wi->surface->Flip(wi->surface, NULL, DSFLIP_BLIT));
+}
 
 static
 void update_win_temp(struct my_window_info * const wi, const int32_t centicelcius)
@@ -488,6 +531,7 @@ void weather_thread(void * const userp)
 	assert(fabdcfg_zmq_connect(my_devid, "weather", client_weather));
 	assert(!zmq_setsockopt(client_weather, ZMQ_SUBSCRIBE, NULL, 0));
 	
+	my_win_init(&ww->clock);
 	my_win_init(&ww->temp);
 	my_win_init(&ww->tempgoal);
 	my_win_init(&ww->i_hvac);
@@ -505,10 +549,16 @@ void weather_thread(void * const userp)
 	char buf[0x10];
 	int32_t current_temp = 0;
 	unsigned current_humidity = 0;
+	struct timespec ts_timeout = {0, 0}, ts_now = {0, 0};
 	while (true)
 	{
-		if (zmq_poll(pollitems, sizeof(pollitems) / sizeof(*pollitems), -1) <= 0)
-			continue;
+		{
+			long msecs_to_change = timespec_to_timeout_ms(&ts_now, &ts_timeout);
+			int rv = zmq_poll(pollitems, sizeof(pollitems) / sizeof(*pollitems), msecs_to_change);
+			update_clock(&ww->clock, &ts_now, &ts_timeout);
+			if (rv < 0)
+				continue;
+		}
 		
 		if (pollitems[3].revents & ZMQ_POLLIN)
 		{
@@ -709,6 +759,12 @@ int main(int argc, char **argv)
 		windesc.posy += font_h4.height;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		weather_windows.i_charging.win = window;
+		
+		windesc.height = font_h2.height - font_h2.descender;
+		windesc.posx = center_x - (windesc.width / 2);
+		windesc.posy = (height / 2) - (font_h2.height - font_h2.ascender) - font_h2.height;
+		dfbassert(layer->CreateWindow(layer, &windesc, &window));
+		weather_windows.clock.win = window;
 		
 		windesc.posx = windesc.posy = 0;
 		windesc.width = width;

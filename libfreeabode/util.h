@@ -235,6 +235,20 @@ void timespec_add(const struct timespec *a, const struct timespec *b, struct tim
 }
 
 static inline
+void timespec_add_ns(const struct timespec * const a, const long long b_ns, struct timespec * const result)
+{
+	result->tv_sec = a->tv_sec;
+	long long tot_nsecs = b_ns + a->tv_nsec;
+	if (tot_nsecs >= 1000000000LL)
+	{
+		result->tv_sec += tot_nsecs / 1000000000LL;
+		result->tv_nsec = tot_nsecs % 1000000000LL;
+	}
+	else
+		result->tv_nsec = tot_nsecs;
+}
+
+static inline
 void timespec_add_ms(const struct timespec *a, const unsigned long b_ms, struct timespec *result)
 {
 	struct timespec b = {
