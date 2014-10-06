@@ -49,12 +49,14 @@ wallknob_event_handler_func current_event_handler;
 static int temp_hysteresis;
 
 struct goal_info {
+	bool active;
 	int cur;
 	double adj_hp;
 };
 
-static struct goal_info goals[1];
+static struct goal_info goals[2];
 static struct goal_info * const goal_high = &goals[0];
+static struct goal_info * const goal_low  = &goals[1];
 static bool adjusting;
 
 static inline
@@ -380,6 +382,9 @@ double my_temp_to_unit(const double temp, const double units_min, const double u
 static
 void win_circle_render_goal(struct my_window_info * const wi, const struct goal_info * const goal, const int units_around, const int units_min, const double radian_offset, const double radians_per_unit, const double hysteresis_unit, const DFBPoint center, const double r1, const double r3)
 {
+	if (!goal->active)
+		return;
+	
 	const int adjusted_goal = adjusting ? goal_adj(goal) : goal->cur;
 	double adjusted_goal_radian = my_temp_to_unit(adjusted_goal, units_min, units_around);
 	adjusted_goal_radian = (adjusted_goal_radian * radians_per_unit) + radian_offset;
@@ -389,7 +394,7 @@ void win_circle_render_goal(struct my_window_info * const wi, const struct goal_
 }
 
 static
-void update_win_circle(struct my_window_info * const wi, const int32_t current_temp, const struct goal_info * const goal_high)
+void update_win_circle(struct my_window_info * const wi, const int32_t current_temp, const struct goal_info * const goal_high, const struct goal_info * const goal_low)
 {
 	const double radians_around = (M_PI * 2) - 1;
 	const double radians_omit = (M_PI * 2) - radians_around;
@@ -435,6 +440,7 @@ void update_win_circle(struct my_window_info * const wi, const int32_t current_t
 	wi->surface->SetRenderOptions(wi->surface, DSRO_ANTIALIAS);
 	
 	win_circle_render_goal(wi, goal_high, units_around, units_min, radian_offset, radians_per_unit, hysteresis_unit, center, r1, r3);
+	win_circle_render_goal(wi, goal_low , units_around, units_min, radian_offset, radians_per_unit, hysteresis_unit, center, r1, r3);
 	
 	{
 		double current_temp_unit = my_temp_to_unit(current_temp, units_min, units_around);
@@ -513,11 +519,21 @@ void tstat_recv(struct weather_windows * const ww, void * const client_tstat)
 	{
 		if (goals->has_temp_high)
 		{
+			if (!adjusting)
+				goal_high->active = true;
 			goal_high->cur = goals->temp_high;
 			if (!client_tstat_ctl)
 				init_client_tstat_ctl();
 			if (!adjusting)
 				update_win_tempgoal(&ww->tempgoal, goal_high->cur, goal_high->cur);
+		}
+		if (goals->has_temp_low)
+		{
+			if (!adjusting)
+				goal_low->active = true;
+			goal_low->cur = goals->temp_low;
+			if (!client_tstat_ctl)
+				init_client_tstat_ctl();
 		}
 		if (goals->has_temp_hysteresis)
 			temp_hysteresis = goals->temp_hysteresis;
@@ -589,7 +605,7 @@ void weather_thread(void * const userp)
 		if (pollitems[2].revents & ZMQ_POLLIN)
 			weather_recv(ww, client_weather, &current_temp, &current_humidity);
 		
-		update_win_circle(&ww->circle, current_temp, goal_high);
+		update_win_circle(&ww->circle, current_temp, goal_high, goal_low);
 	}
 }
 
@@ -603,8 +619,10 @@ void handle_knob_turn(const int axisrel)
 	{
 		adjusting = true;
 		goal_high->adj_hp = goal_high->cur / 100.;
+		goal_low ->adj_hp = goal_low ->cur / 100.;
 	}
 	goal_high->adj_hp -= (double)axisrel / 0xd0;
+	goal_low ->adj_hp -= (double)axisrel / 0xd0;
 	write(adjusting_pipe[1], "", 1);
 }
 
@@ -614,8 +632,16 @@ void make_adjustments()
 	{
 		PbRequest req = PB_REQUEST__INIT;
 		PbHVACGoals goals = PB_HVACGOALS__INIT;
-		goals.has_temp_high = true;
-		goals.temp_high = goal_adj(goal_high);
+		if (goal_high->active)
+		{
+			goals.has_temp_high = true;
+			goals.temp_high = goal_adj(goal_high);
+		}
+		if (goal_low->active)
+		{
+			goals.has_temp_low = true;
+			goals.temp_low = goal_adj(goal_low);
+		}
 		req.hvacgoals = &goals;
 		zmq_send_protobuf(client_tstat_ctl, pb_request, &req, 0);
 	}
@@ -623,15 +649,24 @@ void make_adjustments()
 	{
 		PbRequestReply *reply;
 		zmq_recv_protobuf(client_tstat_ctl, pb_request_reply, reply, NULL);
-		bool success = false;
-		if (reply->hvacgoals && reply->hvacgoals->has_temp_high)
+		int success = 0;
+		if (reply->hvacgoals)
 		{
-			goal_high->cur = reply->hvacgoals->temp_high;
-			success = (reply->hvacgoals->temp_high == goal_adj(goal_high));
-				success = true;
+			if (reply->hvacgoals->has_temp_high)
+			{
+				goal_high->active = true;
+				goal_high->cur = reply->hvacgoals->temp_high;
+				++success;
+			}
+			if (reply->hvacgoals->has_temp_low)
+			{
+				goal_low->active = true;
+				goal_low->cur = reply->hvacgoals->temp_low;
+				++success;
+			}
 		}
 		pb_request_reply__free_unpacked(reply, NULL);
-		if (!success)
+		if (success != 2)
 			return;
 	}
 	
