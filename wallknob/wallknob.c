@@ -215,35 +215,61 @@ void update_win_temp(struct my_window_info * const wi, const int32_t centicelciu
 }
 
 static
-void update_win_tempgoal(struct my_window_info * const wi, int32_t current, int32_t adjusted)
+void format_temperature(char * const buf, const size_t bufsz, int32_t temp)
 {
-	char buf[0x10];
-	
 	switch (temperature_units)
 	{
 		case FTU_CELCIUS:
-			current /= 100;
-			adjusted /= 100;
-			snprintf(buf, sizeof(buf), "%2u", (unsigned)adjusted);
+			temp /= 100;
+			snprintf(buf, bufsz, "%2u", (unsigned)temp);
 			break;
 		
 		case FTU_FAHRENHEIT:
-			current  = centicelcius_to_millifahrenheit(current ) / 1000;
-			adjusted = centicelcius_to_millifahrenheit(adjusted) / 1000;
+			temp = centicelcius_to_millifahrenheit(temp) / 1000;
 			
-			snprintf(buf, sizeof(buf), "%2u", (unsigned)adjusted);
+			snprintf(buf, bufsz, "%2u", (unsigned)temp);
 			break;
 		
 		case FTU_TONAL:
-			current  = centicelcius_to_tempmill(current ) / 0x100;
-			adjusted = centicelcius_to_tempmill(adjusted) / 0x100;
+			temp = centicelcius_to_tempmill(temp) / 0x100;
 			
-			tonalstr(buf, sizeof(buf), adjusted);
+			tonalstr(buf, bufsz, temp);
 			break;
 	}
+}
+
+static
+int32_t update_win_tempgoal_i(bool * const out_adj, const struct goal_info * const goal)
+{
+	if (adjusting)
+	{
+		int32_t temp = goal_adj(goal);
+		*out_adj |= (temp != goal->cur);
+		return temp;
+	}
+	else
+		return goal->cur;
+}
+
+static
+void update_win_tempgoal(struct my_window_info * const wi, const struct goal_info * const goal_high, const struct goal_info * const goal_low)
+{
+	char buf[0x20];
+	int off = 0;
+	bool adj = false;
+	
+	if (goal_low->active)
+	{
+		format_temperature(buf, sizeof(buf), update_win_tempgoal_i(&adj, goal_low));
+		off = strlen(buf);
+		if (goal_high->active)
+			buf[off++] = '-';
+	}
+	if (goal_high->active)
+		format_temperature(&buf[off], sizeof(buf) - off, update_win_tempgoal_i(&adj, goal_high));
 	
 	dfbassert(wi->surface->Clear(wi->surface, 0, 0, 0xff, 0x1f));
-	if (adjusted == current)
+	if (!adj)
 		dfbassert(wi->surface->SetColor(wi->surface, 0x80, 0xff, 0x20, 0xff));
 	else
 		dfbassert(wi->surface->SetColor(wi->surface, 0xff, 0x80, 0x20, 0xff));
@@ -525,7 +551,7 @@ void tstat_recv(struct weather_windows * const ww, void * const client_tstat)
 			if (!client_tstat_ctl)
 				init_client_tstat_ctl();
 			if (!adjusting)
-				update_win_tempgoal(&ww->tempgoal, goal_high->cur, goal_high->cur);
+				update_win_tempgoal(&ww->tempgoal, goal_high, goal_low);
 		}
 		if (goals->has_temp_low)
 		{
@@ -534,6 +560,8 @@ void tstat_recv(struct weather_windows * const ww, void * const client_tstat)
 			goal_low->cur = goals->temp_low;
 			if (!client_tstat_ctl)
 				init_client_tstat_ctl();
+			if (!adjusting)
+				update_win_tempgoal(&ww->tempgoal, goal_high, goal_low);
 		}
 		if (goals->has_temp_hysteresis)
 			temp_hysteresis = goals->temp_hysteresis;
@@ -591,7 +619,7 @@ void weather_thread(void * const userp)
 			read(redraw_pipe[0], buf, sizeof(buf));
 			
 			update_win_temp(&ww->temp, current_temp);
-			update_win_tempgoal(&ww->tempgoal, goal_high->cur, adjusting ? goal_adj(goal_high) : goal_high->cur);
+			update_win_tempgoal(&ww->tempgoal, goal_high, goal_low);
 			update_win_humid(&ww->humid, current_humidity);
 		}
 		
@@ -600,7 +628,7 @@ void weather_thread(void * const userp)
 		if (pollitems[1].revents & ZMQ_POLLIN)
 		{
 			read(adjusting_pipe[0], buf, sizeof(buf));
-			update_win_tempgoal(&ww->tempgoal, goal_high->cur, adjusting ? goal_adj(goal_high) : goal_high->cur);
+			update_win_tempgoal(&ww->tempgoal, goal_high, goal_low);
 		}
 		if (pollitems[2].revents & ZMQ_POLLIN)
 			weather_recv(ww, client_weather, &current_temp, &current_humidity);
