@@ -48,6 +48,19 @@ struct tstat_data {
 };
 
 static
+const char *tstat_mode_str(const enum tstat_mode mode)
+{
+	switch (mode)
+	{
+		case TSM_COOL:
+			return "cool";
+		default:
+		case TSM_OFF:
+			return "off";
+	}
+}
+
+static
 bool hvac_control_wire(void *ctl, PbHVACWires wire, bool connect)
 {
 	PbRequest req = PB_REQUEST__INIT;
@@ -70,61 +83,69 @@ bool hvac_control_wire(void *ctl, PbHVACWires wire, bool connect)
 }
 
 static
+void do_compressor_off(struct tstat_data * const tstat, struct timespec * const ts_now)
+{
+	applog(LOG_INFO, "No %s needed", tstat_mode_str(tstat->mode));
+	if (timespec_isset(&tstat->ts_turn_fan_on))
+	{
+		// Fan hasn't turned on yet, just cancel it
+		timespec_clear(&tstat->ts_turn_fan_on);
+		tstat->mode = TSM_OFF;
+	}
+	else
+	if (timespec_isset(&tstat->ts_turn_compressor_on))
+	{
+		// Compressor hasn't turned on yet, just stop fan
+		timespec_clear(&tstat->ts_turn_compressor_on);
+		tstat->ts_turn_fan_off = *ts_now;
+		tstat->mode = TSM_OFF;
+	}
+	else
+	{
+		applog(LOG_INFO, "Turning off compressor");
+		bool success = true;
+		success &= hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__Y1, false);
+		success &= hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__OB, false);
+		if (!success)
+			applog(LOG_ERR, "WARNING: Failed to turn off compressor");
+		else
+		{
+			tstat->mode = TSM_OFF;
+			struct timespec ts_now;
+			clock_gettime(CLOCK_MONOTONIC, &ts_now);
+			timespec_add_ms(&ts_now, fan_after_cool_ms, &tstat->ts_turn_fan_off);
+		}
+		timespec_add_ms(ts_now, shutoff_delay_ms, &tstat->ts_earliest_compressor);
+	}
+}
+
+static
+void do_compressor_on(struct tstat_data * const tstat, const enum tstat_mode mode)
+{
+	applog(LOG_INFO, "Preparing to %s", tstat_mode_str(mode));
+	tstat->mode = mode;
+	if (timespec_isset(&tstat->ts_turn_fan_off))
+	{
+		// Fan wasn't turned off yet, go straight to compressor
+		tstat->ts_turn_compressor_on = tstat->ts_earliest_compressor;
+		timespec_clear(&tstat->ts_turn_fan_off);
+	}
+	else
+		tstat->ts_turn_fan_on = tstat->ts_earliest_compressor;
+}
+
+static
 void do_tstat_logic(struct tstat_data * const tstat, struct timespec * const ts_now, PbWeather * const weather)
 {
 	switch (tstat->mode)
 	{
 		case TSM_COOL:
 			if (weather->temperature < tstat->t_goal_high - tstat->t_hysteresis)
-			{
-				applog(LOG_INFO, "No cool needed");
-				if (timespec_isset(&tstat->ts_turn_fan_on))
-				{
-					// Fan hasn't turned on yet, just cancel it
-					timespec_clear(&tstat->ts_turn_fan_on);
-					tstat->mode = TSM_OFF;
-				}
-				else
-				if (timespec_isset(&tstat->ts_turn_compressor_on))
-				{
-					// Compressor hasn't turned on yet, just stop fan
-					timespec_clear(&tstat->ts_turn_compressor_on);
-					tstat->ts_turn_fan_off = *ts_now;
-					tstat->mode = TSM_OFF;
-				}
-				else
-				{
-					applog(LOG_INFO, "Turning off compressor");
-					bool success = true;
-					success &= hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__Y1, false);
-					success &= hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__OB, false);
-					if (!success)
-						applog(LOG_ERR, "WARNING: Failed to turn off compressor");
-					else
-					{
-						tstat->mode = TSM_OFF;
-						struct timespec ts_now;
-						clock_gettime(CLOCK_MONOTONIC, &ts_now);
-						timespec_add_ms(&ts_now, fan_after_cool_ms, &tstat->ts_turn_fan_off);
-					}
-					timespec_add_ms(ts_now, shutoff_delay_ms, &tstat->ts_earliest_compressor);
-				}
-			}
+				do_compressor_off(tstat, ts_now);
 			break;
 		case TSM_OFF:
 			if (weather->temperature > tstat->t_goal_high + tstat->t_hysteresis)
-			{
-				applog(LOG_INFO, "Preparing to cool");
-				tstat->mode = TSM_COOL;
-				if (timespec_isset(&tstat->ts_turn_fan_off))
-				{
-					// Fan wasn't turned off yet, go straight to compressor
-					tstat->ts_turn_compressor_on = tstat->ts_earliest_compressor;
-					timespec_clear(&tstat->ts_turn_fan_off);
-				}
-				else
-					tstat->ts_turn_fan_on = tstat->ts_earliest_compressor;
-			}
+				do_compressor_on(tstat, TSM_COOL);
 			break;
 	}
 }
