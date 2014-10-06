@@ -14,6 +14,7 @@
 #include <freeabode/security.h>
 #include <freeabode/util.h>
 
+static const int default_temp_goal_low  = 2400;
 static const int default_temp_goal_high = 3020;
 static const int default_temp_hysteresis = 50;
 static const unsigned long fan_before_cool_ms =  10547;
@@ -24,6 +25,7 @@ static const unsigned long           retry_ms =   1319;
 enum tstat_mode {
 	TSM_OFF,
 	TSM_COOL,
+	TSM_HEAT,
 };
 
 struct tstat_data {
@@ -34,6 +36,7 @@ struct tstat_data {
 	void *server_ctl;
 	
 	// Configuration
+	int t_goal_low;
 	int t_goal_high;
 	int t_hysteresis;
 	
@@ -54,6 +57,8 @@ const char *tstat_mode_str(const enum tstat_mode mode)
 	{
 		case TSM_COOL:
 			return "cool";
+		case TSM_HEAT:
+			return "heat";
 		default:
 		case TSM_OFF:
 			return "off";
@@ -143,9 +148,16 @@ void do_tstat_logic(struct tstat_data * const tstat, struct timespec * const ts_
 			if (weather->temperature < tstat->t_goal_high - tstat->t_hysteresis)
 				do_compressor_off(tstat, ts_now);
 			break;
+		case TSM_HEAT:
+			if (weather->temperature > tstat->t_goal_low + tstat->t_hysteresis)
+				do_compressor_off(tstat, ts_now);
+			break;
 		case TSM_OFF:
 			if (weather->temperature > tstat->t_goal_high + tstat->t_hysteresis)
 				do_compressor_on(tstat, TSM_COOL);
+			else
+			if (weather->temperature < tstat->t_goal_low - tstat->t_hysteresis)
+				do_compressor_on(tstat, TSM_HEAT);
 			break;
 	}
 }
@@ -169,6 +181,9 @@ void read_weather(struct tstat_data *tstat, struct timespec *ts_now)
 static
 void populate_hvacgoals(PbHVACGoals * const goals, const struct tstat_data * const tstat)
 {
+	goals->has_temp_low = true;
+	goals->temp_low = tstat->t_goal_low;
+	
 	goals->has_temp_high = true;
 	goals->temp_high = tstat->t_goal_high;
 	
@@ -186,6 +201,9 @@ void handle_req(struct tstat_data *tstat)
 	
 	if (req->hvacgoals)
 	{
+		if (req->hvacgoals->has_temp_low)
+			tstat->t_goal_low = req->hvacgoals->temp_low;
+		
 		if (req->hvacgoals->has_temp_high)
 			tstat->t_goal_high = req->hvacgoals->temp_high;
 		
@@ -233,6 +251,7 @@ int main(int argc, char **argv)
 	void *my_zmq_context;
 	struct timespec ts_now, ts_timeout;
 	struct tstat_data _tstat = {
+		.t_goal_low = default_temp_goal_low,
 		.t_goal_high = default_temp_goal_high,
 		.t_hysteresis = default_temp_hysteresis,
 		.ts_turn_fan_on = TIMESPEC_INIT_CLEAR,
@@ -287,9 +306,10 @@ int main(int argc, char **argv)
 		}
 		if (timespec_passed(&tstat->ts_turn_compressor_on, &ts_now, &ts_timeout))
 		{
-			applog(LOG_INFO, "Turning on  compressor");
+			const bool ctl_ob = (tstat->mode == TSM_COOL);
+			applog(LOG_INFO, "Turning on  compressor (OB=%c; mode=%s)", ctl_ob ? 'Y' : 'N', tstat_mode_str(tstat->mode));
 			bool success = true;
-			success &= hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__OB, true);
+			success &= hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__OB, ctl_ob);
 			success &= hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__Y1, true);
 			if (success)
 				timespec_clear(&tstat->ts_turn_compressor_on);
