@@ -378,6 +378,17 @@ double my_temp_to_unit(const double temp, const double units_min, const double u
 }
 
 static
+void win_circle_render_goal(struct my_window_info * const wi, const struct goal_info * const goal, const int units_around, const int units_min, const double radian_offset, const double radians_per_unit, const double hysteresis_unit, const DFBPoint center, const double r1, const double r3)
+{
+	const int adjusted_goal = adjusting ? goal_adj(goal) : goal->cur;
+	double adjusted_goal_radian = my_temp_to_unit(adjusted_goal, units_min, units_around);
+	adjusted_goal_radian = (adjusted_goal_radian * radians_per_unit) + radian_offset;
+	dfbassert(wi->surface->SetColor(wi->surface, 0xff, 0xff, 0xff, 0xcf));
+	double temp_hysteresis_radians = radians_per_unit * hysteresis_unit;
+	my_draw_tick(wi->surface, center, r1, r3, temp_hysteresis_radians * 2, adjusted_goal_radian);
+}
+
+static
 void update_win_circle(struct my_window_info * const wi, const int32_t current_temp, const struct goal_info * const goal_high)
 {
 	const double radians_around = (M_PI * 2) - 1;
@@ -423,14 +434,7 @@ void update_win_circle(struct my_window_info * const wi, const int32_t current_t
 	dfbassert(wi->surface->Clear(wi->surface, 0xff, 0xff, 0xff, 0));
 	wi->surface->SetRenderOptions(wi->surface, DSRO_ANTIALIAS);
 	
-	{
-		const int adjusted_goal = adjusting ? goal_adj(goal_high) : goal_high->cur;
-		double adjusted_goal_radian = my_temp_to_unit(adjusted_goal, units_min, units_around);
-		adjusted_goal_radian = (adjusted_goal_radian * radians_per_unit) + radian_offset;
-		dfbassert(wi->surface->SetColor(wi->surface, 0xff, 0xff, 0xff, 0xcf));
-		double temp_hysteresis_radians = radians_per_unit * hysteresis_unit;
-		my_draw_tick(wi->surface, center, r1, r3, temp_hysteresis_radians * 2, adjusted_goal_radian);
-	}
+	win_circle_render_goal(wi, goal_high, units_around, units_min, radian_offset, radians_per_unit, hysteresis_unit, center, r1, r3);
 	
 	{
 		double current_temp_unit = my_temp_to_unit(current_temp, units_min, units_around);
