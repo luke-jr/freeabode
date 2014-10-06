@@ -21,6 +21,11 @@ static const unsigned long  fan_after_cool_ms =  42188;
 static const unsigned long   shutoff_delay_ms = 337500;
 static const unsigned long           retry_ms =   1319;
 
+enum tstat_mode {
+	TSM_OFF,
+	TSM_COOL,
+};
+
 struct tstat_data {
 	// ZMQ sockets
 	void *client_hwctl;
@@ -33,8 +38,8 @@ struct tstat_data {
 	int t_hysteresis;
 	
 	// State
-	bool cooling;
-	struct timespec ts_earliest_cool;
+	enum tstat_mode mode;
+	struct timespec ts_earliest_compressor;
 	
 	// Timers
 	struct timespec ts_turn_fan_on;
@@ -65,17 +70,11 @@ bool hvac_control_wire(void *ctl, PbHVACWires wire, bool connect)
 }
 
 static
-void read_weather(struct tstat_data *tstat, struct timespec *ts_now)
+void do_tstat_logic(struct tstat_data * const tstat, struct timespec * const ts_now, PbWeather * const weather)
 {
-	PbEvent *pbevent;
-	zmq_recv_protobuf(tstat->client_weather, pb_event, pbevent, NULL);
-	PbWeather *weather = pbevent->weather;
-	
-	if (weather && weather->has_temperature)
+	switch (tstat->mode)
 	{
-		applog(LOG_INFO, "Temperature %2u.%02u C", (unsigned)(weather->temperature / 100), (unsigned)(weather->temperature % 100));
-		if (tstat->cooling)
-		{
+		case TSM_COOL:
 			if (weather->temperature < tstat->t_goal_high - tstat->t_hysteresis)
 			{
 				applog(LOG_INFO, "No cool needed");
@@ -83,7 +82,7 @@ void read_weather(struct tstat_data *tstat, struct timespec *ts_now)
 				{
 					// Fan hasn't turned on yet, just cancel it
 					timespec_clear(&tstat->ts_turn_fan_on);
-					tstat->cooling = false;
+					tstat->mode = TSM_OFF;
 				}
 				else
 				if (timespec_isset(&tstat->ts_turn_compressor_on))
@@ -91,7 +90,7 @@ void read_weather(struct tstat_data *tstat, struct timespec *ts_now)
 					// Compressor hasn't turned on yet, just stop fan
 					timespec_clear(&tstat->ts_turn_compressor_on);
 					tstat->ts_turn_fan_off = *ts_now;
-					tstat->cooling = false;
+					tstat->mode = TSM_OFF;
 				}
 				else
 				{
@@ -103,31 +102,44 @@ void read_weather(struct tstat_data *tstat, struct timespec *ts_now)
 						applog(LOG_ERR, "WARNING: Failed to turn off compressor");
 					else
 					{
-						tstat->cooling = false;
+						tstat->mode = TSM_OFF;
 						struct timespec ts_now;
 						clock_gettime(CLOCK_MONOTONIC, &ts_now);
 						timespec_add_ms(&ts_now, fan_after_cool_ms, &tstat->ts_turn_fan_off);
 					}
-					timespec_add_ms(ts_now, shutoff_delay_ms, &tstat->ts_earliest_cool);
+					timespec_add_ms(ts_now, shutoff_delay_ms, &tstat->ts_earliest_compressor);
 				}
 			}
-		}
-		else
-		{
+			break;
+		case TSM_OFF:
 			if (weather->temperature > tstat->t_goal_high + tstat->t_hysteresis)
 			{
 				applog(LOG_INFO, "Preparing to cool");
-				tstat->cooling = true;
+				tstat->mode = TSM_COOL;
 				if (timespec_isset(&tstat->ts_turn_fan_off))
 				{
 					// Fan wasn't turned off yet, go straight to compressor
-					tstat->ts_turn_compressor_on = tstat->ts_earliest_cool;
+					tstat->ts_turn_compressor_on = tstat->ts_earliest_compressor;
 					timespec_clear(&tstat->ts_turn_fan_off);
 				}
 				else
-					tstat->ts_turn_fan_on = tstat->ts_earliest_cool;
+					tstat->ts_turn_fan_on = tstat->ts_earliest_compressor;
 			}
-		}
+			break;
+	}
+}
+
+static
+void read_weather(struct tstat_data *tstat, struct timespec *ts_now)
+{
+	PbEvent *pbevent;
+	zmq_recv_protobuf(tstat->client_weather, pb_event, pbevent, NULL);
+	PbWeather *weather = pbevent->weather;
+	
+	if (weather && weather->has_temperature)
+	{
+		applog(LOG_INFO, "Temperature %2u.%02u C", (unsigned)(weather->temperature / 100), (unsigned)(weather->temperature % 100));
+		do_tstat_logic(tstat, ts_now, weather);
 	}
 	
 	pb_event__free_unpacked(pbevent, NULL);
@@ -207,7 +219,7 @@ int main(int argc, char **argv)
 		.ts_turn_fan_off = TIMESPEC_INIT_CLEAR,
 	}, *tstat = &_tstat;
 	clock_gettime(CLOCK_MONOTONIC, &ts_now);
-	timespec_add_ms(&ts_now, shutoff_delay_ms, &tstat->ts_earliest_cool);
+	timespec_add_ms(&ts_now, shutoff_delay_ms, &tstat->ts_earliest_compressor);
 	
 	my_zmq_context = zmq_ctx_new();
 	
@@ -271,7 +283,7 @@ int main(int argc, char **argv)
 		if (timespec_passed(&tstat->ts_turn_fan_off, &ts_now, &ts_timeout))
 		{
 			applog(LOG_INFO, "Turning off fan");
-			timespec_add_ms(&ts_now, shutoff_delay_ms, &tstat->ts_earliest_cool);
+			timespec_add_ms(&ts_now, shutoff_delay_ms, &tstat->ts_earliest_compressor);
 			if (hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__G , false))
 				timespec_clear(&tstat->ts_turn_fan_off);
 			else
@@ -282,7 +294,7 @@ int main(int argc, char **argv)
 		}
 		{
 			char buf[4][0x100];
-			timespec_to_str(buf[0], sizeof(buf[0]), &tstat->ts_earliest_cool);
+			timespec_to_str(buf[0], sizeof(buf[0]), &tstat->ts_earliest_compressor);
 			timespec_to_str(buf[1], sizeof(buf[1]), &tstat->ts_turn_fan_on);
 			timespec_to_str(buf[2], sizeof(buf[2]), &tstat->ts_turn_compressor_on);
 			timespec_to_str(buf[3], sizeof(buf[3]), &tstat->ts_turn_fan_off);
