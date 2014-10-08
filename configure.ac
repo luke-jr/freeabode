@@ -67,6 +67,7 @@ PKG_CHECK_MODULES([LIBZMQ], [libzmq])
 AC_CONFIG_FILES([
 	Makefile
 	fabd-cli/Makefile
+	htu21d/Makefile
 	libfreeabode/Makefile
 	libfreeabode/libfreeabode.pc:libfreeabode/libfreeabode.pc.in
 	nbp/Makefile
