@@ -66,6 +66,7 @@ Example wallknob.json (notice the 'type' key is included here since it is omitte
 	"type": "wallknob",
 	"clients": {
 		"weather": "fabd:my_nbp/events",
+		"wires": "fabd:my_nbp/events",
 		"tstat": "fabd:my_tstat/events",
 		"tstatctl": "fabd:my_tstat/control"
 	}

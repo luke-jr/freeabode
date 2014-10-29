@@ -84,6 +84,17 @@ void my_win_init(struct my_window_info * const wininfo)
 	dfbassert(wininfo->win->SetOpacity(wininfo->win, 0xff));
 }
 
+static
+void *my_zmqsub(const char * const name)
+{
+	void *client;
+	client = zmq_socket(my_zmq_context, ZMQ_SUB);
+	freeabode_zmq_security(client, false);
+	assert(fabdcfg_zmq_connect(my_devid, name, client));
+	assert(!zmq_setsockopt(client, ZMQ_SUBSCRIBE, NULL, 0));
+	return client;
+}
+
 static inline
 int32_t centicelcius_to_millifahrenheit_delta(int32_t cc)
 {
@@ -493,8 +504,6 @@ void update_win_circle(struct my_window_info * const wi, const int32_t current_t
 static
 void weather_recv(struct weather_windows * const ww, void * const client_weather, int32_t * const current_temp_p, unsigned *current_humidity)
 {
-	static bool fetstatus[PB_HVACWIRES___COUNT] = {true,true,true,true,true,true,true,true,true,true,true,true};
-	
 	PbEvent *pbevent;
 	zmq_recv_protobuf(client_weather, pb_event, pbevent, NULL);
 	
@@ -512,6 +521,16 @@ void weather_recv(struct weather_windows * const ww, void * const client_weather
 			update_win_humid(&ww->humid, weather->humidity);
 		}
 	}
+}
+
+static
+void wires_recv(struct weather_windows * const ww, void * const client_weather)
+{
+	static bool fetstatus[PB_HVACWIRES___COUNT] = {true,true,true,true,true,true,true,true,true,true,true,true};
+	
+	PbEvent *pbevent;
+	zmq_recv_protobuf(client_weather, pb_event, pbevent, NULL);
+	
 	if (pbevent->n_wire_change)
 	{
 		for (int i = 0; i < pbevent->n_wire_change; ++i)
@@ -573,17 +592,9 @@ void weather_thread(void * const userp)
 {
 	struct weather_windows * const ww = userp;
 	
-	void *client_tstat;
-	client_tstat = zmq_socket(my_zmq_context, ZMQ_SUB);
-	freeabode_zmq_security(client_tstat, false);
-	assert(fabdcfg_zmq_connect(my_devid, "tstat", client_tstat));
-	assert(!zmq_setsockopt(client_tstat, ZMQ_SUBSCRIBE, NULL, 0));
-	
-	void *client_weather;
-	client_weather = zmq_socket(my_zmq_context, ZMQ_SUB);
-	freeabode_zmq_security(client_weather, false);
-	assert(fabdcfg_zmq_connect(my_devid, "weather", client_weather));
-	assert(!zmq_setsockopt(client_weather, ZMQ_SUBSCRIBE, NULL, 0));
+	void *client_tstat = my_zmqsub("tstat");
+	void *client_weather = my_zmqsub("weather");
+	void *client_wires = my_zmqsub("wires");
 	
 	my_win_init(&ww->clock);
 	my_win_init(&ww->temp);
@@ -598,6 +609,7 @@ void weather_thread(void * const userp)
 		{ .fd = adjusting_pipe[0], .events = ZMQ_POLLIN },
 		{ .socket = client_weather, .events = ZMQ_POLLIN },
 		{ .fd = redraw_pipe[0], .events = ZMQ_POLLIN },
+		{ .socket = client_wires, .events = ZMQ_POLLIN },
 	};
 	
 	char buf[0x10];
@@ -632,6 +644,8 @@ void weather_thread(void * const userp)
 		}
 		if (pollitems[2].revents & ZMQ_POLLIN)
 			weather_recv(ww, client_weather, &current_temp, &current_humidity);
+		if (pollitems[4].revents & ZMQ_POLLIN)
+			wires_recv(ww, client_wires);
 		
 		update_win_circle(&ww->circle, current_temp, goal_high, goal_low);
 	}
