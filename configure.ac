@@ -10,6 +10,7 @@ AC_PROG_CC_C99
 if test x$ac_cv_prog_cc_c99 = xno; then
 	AC_MSG_ERROR([C99 support is required])
 fi
+AC_PROG_LN_S
 m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
 LT_INIT([disable-static])
 
@@ -63,6 +64,9 @@ AM_CONDITIONAL([HAVE_JANSSON], [true])
 
 PKG_CHECK_MODULES([LIBSODIUM], [libsodium])
 PKG_CHECK_MODULES([LIBZMQ], [libzmq])
+
+AC_SUBST([FREEABODE_CFLAGS],['-I$(top_srcdir) -I$(top_builddir)'])
+AC_SUBST([FREEABODE_LIBS],['../libfreeabode/libfreeabode.la'])
 
 AC_CONFIG_FILES([
 	Makefile
