@@ -1,3 +1,5 @@
+ACLOCAL_AMFLAGS = -I ac-aux
+
 SUBDIRS = \
 	. \
 	libfreeabode \

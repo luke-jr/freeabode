@@ -1,7 +1,9 @@
 AC_PREREQ([2.69])
 AC_INIT([freeabode], [0.0.1], [luke+freeabode@dashjr.org])
-AM_INIT_AUTOMAKE([foreign])
+AC_CONFIG_AUX_DIR([ac-aux])
+AC_CONFIG_MACRO_DIR([ac-aux])
 AC_CONFIG_SRCDIR([libfreeabode/libfreeabode.pc.in])
+AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_HEADERS([config.h])
 
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
