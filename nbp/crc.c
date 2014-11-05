@@ -37,7 +37,7 @@ uint16_t crc16ccitt(const void * const bufp, size_t sz)
 	
 	uint32_t crc = init;
 	uint32_t mask = (1ULL << width) - 1;
-	for (int pos = 0; pos < sz; ++pos)
+	for (size_t pos = 0; pos < sz; ++pos)
 		crc = ((crc << 8)) ^ tab[((crc >> (width - 8)) ^ buf[pos]) & 0xff];
 	
 	crc ^= xorout;

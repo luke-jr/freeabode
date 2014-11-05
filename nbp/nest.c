@@ -86,7 +86,7 @@ bool nbp_send(struct nbp_device *nbp, enum nbp_message_type cmd, void *data, siz
 	uint16_t crc = crc16ccitt(&buf[3], 2 + 2 + datasz);
 	buf[7 + datasz] = crc & 0xff;
 	buf[8 + datasz] = crc >> 8;
-	return (bufsz == write(fd, buf, bufsz));
+	return ((ssize_t)bufsz == write(fd, buf, bufsz));
 }
 
 static
@@ -151,7 +151,7 @@ void nbp_got_message(struct nbp_device * const nbp, uint8_t * const buf, const s
 			nbp_send(nbp, NBPM_FET_PRESENCE_ACK, buf, sz);
 			
 			uint16_t p = 0;
-			for (int i = 0; i < sz; ++i)
+			for (size_t i = 0; i < sz; ++i)
 			{
 				if (i < NBPF__COUNT)
 				{
@@ -216,10 +216,10 @@ void nbp_read(struct nbp_device * const nbp)
 	while (bytes_len(rdbuf) >= 3 + 2 + 2 + 2)
 	{
 		uint8_t * const buf = bytes_buf(rdbuf);
-		if (buf[0] != '\xd5' || buf[1] != '\xaa' || buf[2] != '\x96')
+		if (buf[0] != 0xd5 || buf[1] != 0xaa || buf[2] != 0x96)
 		{
 invalid: ;
-			int pos = bytes_find_next(rdbuf, '\xd5', 1);
+			int pos = bytes_find_next(rdbuf, 0xd5, 1);
 			if (pos == -1)
 			{
 				bytes_reset(rdbuf);
@@ -232,7 +232,7 @@ invalid: ;
 			}
 		}
 		uint16_t datasz = buf[5] | (((uint16_t)buf[6]) << 8);
-		if (bytes_len(rdbuf) < 3 + 2 + 2 + datasz + 2)
+		if (bytes_len(rdbuf) < (unsigned)(3 + 2 + 2 + datasz + 2))
 			// Need more data to proceed
 			break;
 		uint16_t good_crc = crc16ccitt(&buf[3], 2 + 2 + datasz);
