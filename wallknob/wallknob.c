@@ -3,6 +3,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #include <directfb.h>
 #include <zmq.h>
@@ -400,7 +401,7 @@ void my_draw_coloured_tick(IDirectFBSurface * const surface, const DFBPoint cent
 static
 double my_temp_to_unit(const double temp, const double units_min, const double units_around)
 {
-	double r;
+	double r = 0.0;
 	switch (temperature_units)
 	{
 		case FTU_CELCIUS:
@@ -438,8 +439,8 @@ void update_win_circle(struct my_window_info * const wi, const int32_t current_t
 	const double radians_omit = (M_PI * 2) - radians_around;
 	const double radians_omit_div2 = radians_omit / 2;
 	const double radian_offset = M_PI_2 + radians_omit_div2;
-	int units_around, units_min, units_base = 10, units_halfbase = 5;
-	double hysteresis_unit;
+	int units_around = 2, units_min = 0, units_base = 10, units_halfbase = 5;
+	double hysteresis_unit = 0.0;
 	
 	switch (temperature_units)
 	{
