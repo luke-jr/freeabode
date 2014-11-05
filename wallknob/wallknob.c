@@ -10,6 +10,7 @@
 
 #include <freeabode/fabdcfg.h>
 #include <freeabode/freeabode.pb-c.h>
+#include <freeabode/logging.h>
 #include <freeabode/security.h>
 #include <freeabode/util.h>
 
@@ -628,7 +629,8 @@ void weather_thread(void * const userp)
 		
 		if (pollitems[3].revents & ZMQ_POLLIN)
 		{
-			read(redraw_pipe[0], buf, sizeof(buf));
+			if (read(redraw_pipe[0], buf, sizeof(buf)) <= 0)
+				applog(LOG_WARNING, "%s_pipe %s failed", "redraw", "read");
 			
 			update_win_temp(&ww->temp, current_temp);
 			update_win_tempgoal(&ww->tempgoal, goal_high, goal_low);
@@ -639,7 +641,8 @@ void weather_thread(void * const userp)
 			tstat_recv(ww, client_tstat);
 		if (pollitems[1].revents & ZMQ_POLLIN)
 		{
-			read(adjusting_pipe[0], buf, sizeof(buf));
+			if (read(adjusting_pipe[0], buf, sizeof(buf)) <= 0)
+				applog(LOG_WARNING, "%s_pipe %s failed", "adjusting", "read");
 			update_win_tempgoal(&ww->tempgoal, goal_high, goal_low);
 		}
 		if (pollitems[2].revents & ZMQ_POLLIN)
@@ -665,7 +668,8 @@ void handle_knob_turn(const int axisrel)
 	}
 	goal_high->adj_hp -= (double)axisrel / 0xd0;
 	goal_low ->adj_hp -= (double)axisrel / 0xd0;
-	write(adjusting_pipe[1], "", 1);
+	if (write(adjusting_pipe[1], "", 1) != 1)
+		applog(LOG_ERR, "%s_pipe %s failed", "adjusting", "write");
 }
 
 static
@@ -713,7 +717,8 @@ void make_adjustments()
 	}
 	
 	adjusting = false;
-	write(adjusting_pipe[1], "", 1);
+	if (write(adjusting_pipe[1], "", 1) != 1)
+		applog(LOG_WARNING, "%s_pipe %s failed", "adjusting", "write");
 }
 
 static struct my_window_info top_wi;
@@ -747,7 +752,8 @@ void handle_button_press()
 						"Tonal",
 					};
 					temperature_units = fabdwk_textmenu(&top_wi, "Choose units to display:", choices, sizeof(choices) / sizeof(*choices), temperature_units);
-					write(redraw_pipe[1], "", 1);
+					if (write(redraw_pipe[1], "", 1) != 1)
+						applog(LOG_ERR, "%s_pipe %s failed", "redraw", "write");
 				}
 			}
 			break;
