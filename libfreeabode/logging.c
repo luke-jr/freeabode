@@ -6,6 +6,8 @@
 #include <sys/time.h>
 #include <time.h>
 
+#include "logging.h"
+
 void applog(const int loglevel, const char * const fmt, ...)
 {
 	struct timeval tv;

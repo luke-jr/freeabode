@@ -6,6 +6,8 @@
 #include <strings.h>
 #include <sys/types.h>
 
+#include "util.h"
+
 char *fabd_memndup(const void * const p, const size_t sz)
 {
 	char * const rv = malloc(sz + 1);

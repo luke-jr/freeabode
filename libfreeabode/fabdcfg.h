@@ -5,7 +5,7 @@
 
 #include <jansson.h>
 
-extern void fabdcfg_load_directory();
+extern void fabdcfg_load_directory(void);
 extern void fabdcfg_load_device(const char *devid);
 extern const char *fabd_common_argv(int argc, char **argv, const char *type);
 
