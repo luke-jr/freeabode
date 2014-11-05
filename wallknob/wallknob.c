@@ -537,7 +537,7 @@ void wires_recv(struct weather_windows * const ww, void * const client_weather)
 	
 	if (pbevent->n_wire_change)
 	{
-		for (int i = 0; i < pbevent->n_wire_change; ++i)
+		for (size_t i = 0; i < pbevent->n_wire_change; ++i)
 			if (pbevent->wire_change[i]->wire < PB_HVACWIRES___COUNT && pbevent->wire_change[i]->wire > 0)
 				fetstatus[pbevent->wire_change[i]->wire] = pbevent->wire_change[i]->connect;
 		update_win_i_hvac(&ww->i_hvac, fetstatus);
