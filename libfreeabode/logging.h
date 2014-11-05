@@ -3,6 +3,7 @@
 
 #include <syslog.h>
 
+__attribute__((format(printf, 2, 3)))
 extern void applog(int loglevel, const char *fmt, ...);
 
 #endif
