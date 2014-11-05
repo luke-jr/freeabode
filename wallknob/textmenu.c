@@ -1,3 +1,5 @@
+#include "config.h"
+
 #include <directfb.h>
 
 #include <freeabode/util.h>
