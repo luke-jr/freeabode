@@ -438,7 +438,7 @@ void j2p_assign_field(void * const out_pb, const ProtobufCFieldDescriptor * cons
 		{
 			handled_type = true;
 			void **p = addr, *msg;
-			const struct ProtobufCMessageDescriptor *des = pbfield->descriptor;
+			const ProtobufCMessageDescriptor *des = pbfield->descriptor;
 			msg = json_to_protobuf(des, jval, errcount);
 			if (!msg)
 				// errcount already incremented by json_to_protobuf
