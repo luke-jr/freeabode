@@ -43,7 +43,7 @@ AS_IF([test "${PROTOC_C}" == "no"], [AC_MSG_ERROR([ProtoBuf compiler "protoc-c" 
 
 have_directfb=true
 AC_ARG_WITH([directfb],
-	[AC_HELP_STRING([--without-directfb],[Build without DirectFB support (default enabled)])],
+	[AS_HELP_STRING([--without-directfb],[Build without DirectFB support (default enabled)])],
 	[
 		if test x$withval = xyes; then
 			PKG_CHECK_MODULES([DIRECTFB], [directfb])
