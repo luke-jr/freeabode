@@ -136,6 +136,7 @@ void j2p_assign_field(void * const out_pb, const ProtobufCFieldDescriptor * cons
 		}
 		addr = *p + (item_sz * *np);
 	}
+	bool handled_type = false;
 	switch (pbfield->type)
 	{
 		case PROTOBUF_C_TYPE_INT32:
@@ -149,6 +150,7 @@ void j2p_assign_field(void * const out_pb, const ProtobufCFieldDescriptor * cons
 		case PROTOBUF_C_TYPE_UINT64:
 		case PROTOBUF_C_TYPE_FIXED64:
 		{
+			handled_type = true;
 			bool neg = false;
 			unsigned long long n;
 			switch (json_typeof(jval))
@@ -238,6 +240,7 @@ void j2p_assign_field(void * const out_pb, const ProtobufCFieldDescriptor * cons
 		case PROTOBUF_C_TYPE_FLOAT:
 		case PROTOBUF_C_TYPE_DOUBLE:
 		{
+			handled_type = true;
 			double n;
 			switch (json_typeof(jval))
 			{
@@ -286,6 +289,7 @@ void j2p_assign_field(void * const out_pb, const ProtobufCFieldDescriptor * cons
 		
 		case PROTOBUF_C_TYPE_BOOL:
 		{
+			handled_type = true;
 			protobuf_c_boolean *p = addr;
 			switch (json_typeof(jval))
 			{
@@ -319,6 +323,7 @@ void j2p_assign_field(void * const out_pb, const ProtobufCFieldDescriptor * cons
 		
 		case PROTOBUF_C_TYPE_ENUM:
 		{
+			handled_type = true;
 			int n;
 			switch (json_typeof(jval))
 			{
@@ -376,6 +381,7 @@ void j2p_assign_field(void * const out_pb, const ProtobufCFieldDescriptor * cons
 		
 		case PROTOBUF_C_TYPE_STRING:
 		{
+			handled_type = true;
 			char **p = addr;
 			switch (json_typeof(jval))
 			{
@@ -404,6 +410,7 @@ void j2p_assign_field(void * const out_pb, const ProtobufCFieldDescriptor * cons
 		
 		case PROTOBUF_C_TYPE_BYTES:
 		{
+			handled_type = true;
 			ProtobufCBinaryData *p = addr;
 			switch (json_typeof(jval))
 			{
@@ -429,6 +436,7 @@ void j2p_assign_field(void * const out_pb, const ProtobufCFieldDescriptor * cons
 		
 		case PROTOBUF_C_TYPE_MESSAGE:
 		{
+			handled_type = true;
 			void **p = addr, *msg;
 			const struct ProtobufCMessageDescriptor *des = pbfield->descriptor;
 			msg = json_to_protobuf(des, jval, errcount);
@@ -438,10 +446,10 @@ void j2p_assign_field(void * const out_pb, const ProtobufCFieldDescriptor * cons
 			*p = msg;
 			break;
 		}
-		
-		default:
-			goto err;
 	}
+	if (!handled_type)
+		// We can handle this using a default case in the switch, but we want warnings during compile if a new case is added to the types :)
+		goto err;
 	if (pbfield->label == PROTOBUF_C_LABEL_REPEATED)
 	{
 		size_t *np = out_pb + pbfield->quantifier_offset;
