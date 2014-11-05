@@ -75,9 +75,9 @@ bool nbp_send(struct nbp_device *nbp, enum nbp_message_type cmd, void *data, siz
 	int fd = nbp->_fd;
 	size_t bufsz = 3 + 2 + 2 + datasz + 2;
 	uint8_t buf[bufsz];
-	buf[0] = '\xd5';
-	buf[1] = '\xaa';
-	buf[2] = '\x96';
+	buf[0] = 0xd5;
+	buf[1] = 0xaa;
+	buf[2] = 0x96;
 	buf[3] = cmd & 0xff;
 	buf[4] = cmd >> 8;
 	buf[5] = datasz & 0xff;
