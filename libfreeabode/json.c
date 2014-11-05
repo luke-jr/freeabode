@@ -77,7 +77,7 @@ void j2p_assign_field(void * const out_pb, const ProtobufCFieldDescriptor * cons
 		// addr is actually an array of items
 		void ** const p = addr;
 		size_t *np = out_pb + pbfield->quantifier_offset;
-		size_t item_sz;
+		size_t item_sz = 0;
 		switch (pbfield->type)
 		{
 			case PROTOBUF_C_TYPE_INT32:
@@ -114,6 +114,9 @@ void j2p_assign_field(void * const out_pb, const ProtobufCFieldDescriptor * cons
 				item_sz = sizeof(ProtobufCBinaryData);
 				break;
 		}
+		if (!item_sz)
+			// In theory, we can handle this using a default case in the switch, but we want warnings during compile if a new case is added to the types :)
+			goto err;
 		if (*p)
 		{
 			// already allocated
@@ -489,7 +492,7 @@ static
 json_t *p2j_elem(void ** const addr_p, const ProtobufCFieldDescriptor * const pbfield, int * const errcount)
 {
 	void * const addr = *addr_p;
-	json_t *j;
+	json_t *j = NULL;
 	switch (pbfield->type)
 	{
 #define P2J_N(JTYPE, TYPE)  do{  \
