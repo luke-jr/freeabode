@@ -210,7 +210,7 @@ bool timespec_isset(const struct timespec *timer)
 static inline
 void timespec_clear(struct timespec *timer)
 {
-	timer->tv_sec = (time_t)-1;
+	*timer = (struct timespec)TIMESPEC_INIT_CLEAR;
 }
 
 static inline
