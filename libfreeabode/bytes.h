@@ -32,13 +32,13 @@ size_t bytes_len(const bytes_t *b)
 }
 
 static inline
-ssize_t bytes_find_next(const bytes_t * const b, const uint8_t needle, const int pos)
+ssize_t bytes_find_next(const bytes_t * const b, const uint8_t needle, const size_t pos)
 {
 	const size_t blen = bytes_len(b);
 	const uint8_t * const buf = bytes_buf(b);
-	for (int i = pos; i < blen; ++i)
+	for (size_t i = pos; i < blen; ++i)
 		if (buf[i] == needle)
-			return i;
+			return (ssize_t)i;
 	return -1;
 }
 
