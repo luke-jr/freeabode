@@ -68,7 +68,7 @@ PKG_CHECK_MODULES([LIBSODIUM], [libsodium])
 PKG_CHECK_MODULES([LIBZMQ], [libzmq])
 
 AC_SUBST([FREEABODE_CFLAGS],['-I$(top_srcdir) -I$(top_builddir)'])
-AC_SUBST([FREEABODE_LIBS],['../libfreeabode/libfreeabode.la'])
+AC_SUBST([FREEABODE_LIBS],['$(top_builddir)/libfreeabode/libfreeabode.la'])
 
 AC_CONFIG_FILES([
 	Makefile
