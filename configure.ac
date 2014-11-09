@@ -2,7 +2,7 @@ AC_PREREQ([2.69])
 AC_INIT([freeabode], [0.0.1], [luke+freeabode@dashjr.org])
 AC_CONFIG_AUX_DIR([ac-aux])
 AC_CONFIG_MACRO_DIR([ac-aux])
-AC_CONFIG_SRCDIR([libfreeabode/libfreeabode.pc.in])
+AC_CONFIG_SRCDIR([freeabode/libfreeabode.pc.in])
 AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_HEADERS([config.h])
 
@@ -68,14 +68,14 @@ PKG_CHECK_MODULES([LIBSODIUM], [libsodium])
 PKG_CHECK_MODULES([LIBZMQ], [libzmq])
 
 AC_SUBST([FREEABODE_CFLAGS],['-I$(top_srcdir) -I$(top_builddir)'])
-AC_SUBST([FREEABODE_LIBS],['$(top_builddir)/libfreeabode/libfreeabode.la'])
+AC_SUBST([FREEABODE_LIBS],['$(top_builddir)/freeabode/libfreeabode.la'])
 
 AC_CONFIG_FILES([
 	Makefile
 	fabd-cli/Makefile
 	htu21d/Makefile
-	libfreeabode/Makefile
-	libfreeabode/libfreeabode.pc:libfreeabode/libfreeabode.pc.in
+	freeabode/Makefile
+	freeabode/libfreeabode.pc:freeabode/libfreeabode.pc.in
 	nbp/Makefile
 	tstat/Makefile
 	wallknob/Makefile

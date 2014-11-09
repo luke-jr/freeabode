@@ -1,7 +1,7 @@
 Design
 ------
 
-libfreeabode: General-purpose or otherwise shared code for FreeAbode components.
+freeabode: Library of general-purpose or otherwise shared code for FreeAbode components.
 
 nbp: Nest backplate interface.
 

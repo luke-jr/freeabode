@@ -21,8 +21,8 @@ configure
 stamp-h1
 *.pb-c.h
 *.pb-c.c
-libfreeabode/libfreeabode.la
-libfreeabode/libfreeabode.pc
+freeabode/libfreeabode.la
+freeabode/libfreeabode.pc
 libtool
 .libs
 a.out
