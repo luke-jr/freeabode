@@ -1,5 +1,5 @@
-bin_PROGRAMS = freeabode
+bin_PROGRAMS = nbp
 
-freeabode_SOURCES = main.c nest.c nest.h crc.c crc.h
-freeabode_CFLAGS = $(FREEABODE_CFLAGS) $(LIBZMQ_CFLAGS) $(PROTOBUF_C_CFLAGS)
-freeabode_LDADD = $(FREEABODE_LIBS) $(LIBZMQ_LIBS) $(PROTOBUF_C_LIBS)
+nbp_SOURCES = main.c nest.c nest.h crc.c crc.h
+nbp_CFLAGS = $(FREEABODE_CFLAGS) $(LIBZMQ_CFLAGS) $(PROTOBUF_C_CFLAGS)
+nbp_LDADD = $(FREEABODE_LIBS) $(LIBZMQ_LIBS) $(PROTOBUF_C_LIBS)
