@@ -181,6 +181,7 @@ int main(int argc, char **argv)
 	
 	const char * const nbp_ttypath = fabdcfg_device_getstr(my_devid, "backplate_device") ?: "/dev/ttyO2";
 	struct nbp_device *nbp = nbp_open(nbp_ttypath);
+	assert(nbp);
 	assert(nbp_send(nbp, NBPM_RESET, NULL, 0));
 #ifdef DEBUG_NBP
 	nbp->cb_msg = debug_msg;

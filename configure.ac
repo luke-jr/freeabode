@@ -12,7 +12,6 @@ AC_PROG_CC_C99
 if test x$ac_cv_prog_cc_c99 = xno; then
 	AC_MSG_ERROR([C99 support is required])
 fi
-AC_PROG_LN_S
 m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
 LT_INIT([disable-static])
 
