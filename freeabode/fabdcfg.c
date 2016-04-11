@@ -97,6 +97,14 @@ const char *fabdcfg_device_getstr(const char * const devid, const char * const k
 	return json_string_value(j);
 }
 
+int fabdcfg_device_getint(const char * const devid, const char * const key, const int def)
+{
+	json_t * const j = fabdcfg_device_get(devid, key);
+	if (!(j && json_is_number(j)))
+		return def;
+	return json_number_value(j);
+}
+
 bool fabdcfg_device_checktype(const char * const devid, const char * const type)
 {
 	const char * const atype = fabdcfg_device_getstr(devid, "type");

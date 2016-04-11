@@ -11,6 +11,7 @@ extern const char *fabd_common_argv(int argc, char **argv, const char *type);
 
 extern json_t *fabdcfg_device_get(const char *devid, const char *key);
 extern const char *fabdcfg_device_getstr(const char *devid, const char *key);
+extern int fabdcfg_device_getint(const char *devid, const char *key, int def);
 extern bool fabdcfg_device_checktype(const char *devid, const char *type);
 
 extern bool fabdcfg_zmq_bind(const char *devid, const char *servername, void *socket);
