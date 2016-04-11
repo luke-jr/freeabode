@@ -251,9 +251,9 @@ int main(int argc, char **argv)
 	void *my_zmq_context;
 	struct timespec ts_now, ts_timeout;
 	struct tstat_data _tstat = {
-		.t_goal_low = default_temp_goal_low,
-		.t_goal_high = default_temp_goal_high,
-		.t_hysteresis = default_temp_hysteresis,
+		.t_goal_low = fabdcfg_device_getint(my_devid, "temp_low", default_temp_goal_low),
+		.t_goal_high = fabdcfg_device_getint(my_devid, "temp_high", default_temp_goal_high),
+		.t_hysteresis = fabdcfg_device_getint(my_devid, "temp_hysteresis", default_temp_hysteresis),
 		.ts_turn_fan_on = TIMESPEC_INIT_CLEAR,
 		.ts_turn_compressor_on = TIMESPEC_INIT_CLEAR,
 		.ts_turn_fan_off = TIMESPEC_INIT_CLEAR,
