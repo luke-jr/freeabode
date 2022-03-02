@@ -60,6 +60,23 @@ AC_ARG_WITH([directfb],
 )
 AM_CONDITIONAL([HAVE_DIRECTFB], [$have_directfb])
 
+have_libgpiod=false
+AC_ARG_WITH([libgpiod],
+	[AS_HELP_STRING([--without-libgpiod],[Build without libgpiod support (default enabled)])],
+	[
+		if test x$withval = xyes; then
+			PKG_CHECK_MODULES([LIBGPIOD], [libgpiod])
+			have_libgpiod=true
+		fi
+	],
+	[
+		PKG_CHECK_MODULES([LIBGPIOD], [libgpiod],[
+			have_libgpiod=true
+		])
+	]
+)
+AM_CONDITIONAL([HAVE_LIBGPIOD], [$have_libgpiod])
+
 PKG_CHECK_MODULES([JANSSON], [jansson])
 AM_CONDITIONAL([HAVE_JANSSON], [true])
 
@@ -72,6 +89,7 @@ AC_SUBST([FREEABODE_LIBS],['$(top_builddir)/freeabode/libfreeabode.la'])
 AC_CONFIG_FILES([
 	Makefile
 	fabd-cli/Makefile
+	gpio_hvac/Makefile
 	htu21d/Makefile
 	freeabode/Makefile
 	freeabode/libfreeabode.pc:freeabode/libfreeabode.pc.in

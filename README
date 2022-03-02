@@ -3,6 +3,8 @@ Design
 
 freeabode: Library of general-purpose or otherwise shared code for FreeAbode components.
 
+gpio_hvac: GPIO-based HVAC controls (like the HestiaPi)
+
 nbp: Nest backplate interface.
 
 tstat: Thermostat logic; controls nbp intelligently.
