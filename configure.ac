@@ -3,7 +3,7 @@ AC_INIT([freeabode], [0.0.1], [luke+freeabode@dashjr.org])
 AC_CONFIG_AUX_DIR([ac-aux])
 AC_CONFIG_MACRO_DIR([ac-aux])
 AC_CONFIG_SRCDIR([freeabode/libfreeabode.pc.in])
-AM_INIT_AUTOMAKE([foreign])
+AM_INIT_AUTOMAKE([foreign subdir-objects])
 AC_CONFIG_HEADERS([config.h])
 
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
@@ -89,6 +89,7 @@ AC_SUBST([FREEABODE_LIBS],['$(top_builddir)/freeabode/libfreeabode.la'])
 AC_CONFIG_FILES([
 	Makefile
 	fabd-cli/Makefile
+	bme280/Makefile
 	gpio_hvac/Makefile
 	htu21d/Makefile
 	freeabode/Makefile
