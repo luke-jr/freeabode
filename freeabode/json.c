@@ -31,6 +31,13 @@ json_t *fabd_json_array(json_t * const j)
 	return jj;
 }
 
+int fabd_json_as_int(const json_t * const j, const int def)
+{
+	if (!(j && json_is_number(j)))
+		return def;
+	return json_number_value(j);
+}
+
 static
 bool pb_is_optional_and_missing(const ProtobufCFieldDescriptor * const pbfield, void *_pb)
 {
