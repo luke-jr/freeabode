@@ -96,23 +96,18 @@ void my_delay_us(const uint32_t period, void * const intf_ptr)
 static
 BME280_INTF_RET_TYPE my_i2c_write(const uint8_t register_addr, const uint8_t * const data, const uint32_t len, void * const intf_ptr)
 {
-	const uint8_t *p = &register_addr;
-	size_t rem = 1;
+	const size_t buflen = len + 1;
+	char buf[buflen];
+	buf[0] = register_addr;
+	memcpy(&buf[1], data, len);
 	const int fd = bme280_i2c_fd;
-	while (rem) {
+	while (true) {
 		my_loop(NULL, fd, ZMQ_POLLOUT);
-		const ssize_t rv = write(fd, p, rem);
-		if (rv == rem) {
-			if (p == &register_addr) {
-				p = data;
-				rem = len;
-				continue;
-			}
+		const ssize_t rv = write(fd, buf, buflen);
+		if (rv == buflen) {
 			break;
 		}
-		if (rv < 0) return !BME280_INTF_RET_SUCCESS;
-		p += rv;
-		rem -= rv;
+		if (rv != 0) return !BME280_INTF_RET_SUCCESS;
 	}
 	return BME280_INTF_RET_SUCCESS;
 }
