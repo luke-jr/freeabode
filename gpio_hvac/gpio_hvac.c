@@ -13,6 +13,8 @@
 #include <freeabode/security.h>
 #include <freeabode/util.h>
 
+static const struct timespec ts_shutoff_delay = { .tv_sec = 337, .tv_nsec = 500000000, };
+static const struct timespec ts_reversing_delay_tolerance = { .tv_sec = 1, };
 
 static const char *my_devid;
 static void *my_zmq_context, *my_zmq_publisher;
@@ -20,6 +22,7 @@ static void *my_zmq_context, *my_zmq_publisher;
 struct my_gpioinfo {
 	struct gpiod_line *gpioline;
 	enum fabd_tristate value;
+	struct timespec last_changed;
 };
 
 struct gpio_hvac_obj {
@@ -29,10 +32,15 @@ struct gpio_hvac_obj {
 static
 void gpio_hvac_obj_init(struct gpio_hvac_obj * const gho)
 {
+	struct timespec ts_now;
+	clock_gettime(CLOCK_MONOTONIC, &ts_now);
 	for (int i = 0; i < PB_HVACWIRES___COUNT; ++i)
 	{
 		gho->gpio[i].gpioline = NULL;
 		gho->gpio[i].value = FTS_UNKNOWN;
+		
+		// Initialise last_changed to now, since it's used for safety lockouts only
+		gho->gpio[i].last_changed = ts_now;
 	}
 }
 
@@ -50,6 +58,9 @@ bool control_wire_unsafe(struct gpio_hvac_obj * const gho, const PbHVACWires wir
 	const bool success = (0 == gpiod_line_set_value(gpioinfo->gpioline, connect ? 1 : 0));
 	if (!success) return false;
 	
+	if (gpioinfo->value != connect) {
+		clock_gettime(CLOCK_MONOTONIC, &gpioinfo->last_changed);
+	}
 	gpioinfo->value = connect;
 	
 	PbEvent pbevent = PB_EVENT__INIT;
@@ -68,7 +79,72 @@ bool control_wire_unsafe(struct gpio_hvac_obj * const gho, const PbHVACWires wir
 static
 bool control_wire_safe(struct gpio_hvac_obj * const gho, const PbHVACWires wire, const bool connect)
 {
-	// TODO: Safety lockouts
+	struct my_gpioinfo * const gpioinfo = gpioinfo_from_wire(gho, wire);
+	switch (wire) {
+		case PB_HVACWIRES__Y1:  // compressor
+		case PB_HVACWIRES__W2:  // heat 2
+		{
+			if (connect && gpioinfo->value != true) {
+				// after turning off, lock off for a few minutes
+				struct timespec ts_soonest_cycle, ts_now;
+				timespec_add(&gpioinfo->last_changed, &ts_shutoff_delay, &ts_soonest_cycle);
+				clock_gettime(CLOCK_MONOTONIC, &ts_now);
+				if (timespec_cmp(&ts_now, &ts_soonest_cycle) < 0) {
+					applog(LOG_WARNING, "Prevented attempt to turn on %s during safety lockout", (wire == PB_HVACWIRES__Y1) ? "compressor" : "heat 2");
+					return false;
+				}
+				
+				struct my_gpioinfo * const gpioinfo_fan = gpioinfo_from_wire(gho, PB_HVACWIRES__G);
+				if (gpioinfo_fan->gpioline && gpioinfo_fan->value != true) {
+					// force fan on
+					if (!control_wire_safe(gho, PB_HVACWIRES__G, true)) {
+						applog(LOG_WARNING, "Failed to force fan on during request to turn on %s", (wire == PB_HVACWIRES__Y1) ? "compressor" : "heat 2");
+						return false;
+					}
+				}
+			}
+			break;
+		}
+		case PB_HVACWIRES__OB:  // reversing
+		{
+			// don't allow changes while compressor is running
+			// but if attempted, try to shut off the compressor since it's working against what is presumably desired
+			struct my_gpioinfo * const gpioinfo_compressor = gpioinfo_from_wire(gho, PB_HVACWIRES__Y1);
+			if (gpioinfo_compressor->value != false && connect != gpioinfo->value) {
+				struct timespec ts_tolerance, ts_now;
+				timespec_add(&gpioinfo_compressor->last_changed, &ts_reversing_delay_tolerance, &ts_tolerance);
+				clock_gettime(CLOCK_MONOTONIC, &ts_now);
+				if (timespec_cmp(&ts_now, &ts_tolerance) > 0) {
+					applog(LOG_WARNING, "Prevented attempt to turn %s reversing while compressor running", connect ? "on" : "off");
+					control_wire_safe(gho, PB_HVACWIRES__Y1, false);
+					return false;
+				}
+			}
+			break;
+		}
+		case PB_HVACWIRES__G:   // fan
+		{
+			// don't allow turning off while compressor or heat running
+			if (!connect) {
+				struct my_gpioinfo * const gpioinfo_compressor = gpioinfo_from_wire(gho, PB_HVACWIRES__Y1);
+				if (gpioinfo_compressor->value != false) {
+					applog(LOG_WARNING, "Prevented attempt to turn off fan while compressor running");
+					return false;
+				}
+				
+				struct my_gpioinfo * const gpioinfo_heat2 = gpioinfo_from_wire(gho, PB_HVACWIRES__W2);
+				if (gpioinfo_heat2->gpioline && gpioinfo_heat2->value != false) {
+					applog(LOG_WARNING, "Prevented attempt to turn off fan while heat 2 running");
+					return false;
+				}
+			}
+			break;
+		}
+		default:
+			// Assume unknown relays are always unsafe, since we have no safety controls
+			applog(LOG_WARNING, "Prevented attempt to turn %s unknown wire #%d", connect ? "on" : "off", (int)wire);
+			return false;
+	}
 	return control_wire_unsafe(gho, wire, connect);
 }
 
