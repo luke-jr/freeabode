@@ -12,6 +12,7 @@
 #include <freeabode/logging.h>
 #include <freeabode/security.h>
 #include <freeabode/util.h>
+#include <freeabode/util_hvac.h>
 
 static const struct timespec ts_shutoff_delay = { .tv_sec = 337, .tv_nsec = 500000000, };
 static const struct timespec ts_reversing_delay_tolerance = { .tv_sec = 1, };
@@ -56,9 +57,13 @@ bool control_wire_unsafe(struct gpio_hvac_obj * const gho, const PbHVACWires wir
 	struct my_gpioinfo * const gpioinfo = gpioinfo_from_wire(gho, wire);
 	if (!gpioinfo->gpioline) return false;
 	const bool success = (0 == gpiod_line_set_value(gpioinfo->gpioline, connect ? 1 : 0));
-	if (!success) return false;
+	if (!success) {
+		applog(LOG_WARNING, "Failed to set GPIO for turning %s %s", connect ? "on" : "off", hvacwire_name(wire));
+		return false;
+	}
 	
 	if (gpioinfo->value != connect) {
+		applog(LOG_INFO, "Turned %s %s", hvacwire_name(wire), connect ? "on" : "off");
 		clock_gettime(CLOCK_MONOTONIC, &gpioinfo->last_changed);
 	}
 	gpioinfo->value = connect;
@@ -90,7 +95,7 @@ bool control_wire_safe(struct gpio_hvac_obj * const gho, const PbHVACWires wire,
 				timespec_add(&gpioinfo->last_changed, &ts_shutoff_delay, &ts_soonest_cycle);
 				clock_gettime(CLOCK_MONOTONIC, &ts_now);
 				if (timespec_cmp(&ts_now, &ts_soonest_cycle) < 0) {
-					applog(LOG_WARNING, "Prevented attempt to turn on %s during safety lockout", (wire == PB_HVACWIRES__Y1) ? "compressor" : "heat 2");
+					applog(LOG_WARNING, "Prevented attempt to turn on %s during safety lockout", hvacwire_name(wire));
 					return false;
 				}
 				
@@ -98,7 +103,7 @@ bool control_wire_safe(struct gpio_hvac_obj * const gho, const PbHVACWires wire,
 				if (gpioinfo_fan->gpioline && gpioinfo_fan->value != true) {
 					// force fan on
 					if (!control_wire_safe(gho, PB_HVACWIRES__G, true)) {
-						applog(LOG_WARNING, "Failed to force fan on during request to turn on %s", (wire == PB_HVACWIRES__Y1) ? "compressor" : "heat 2");
+						applog(LOG_WARNING, "Failed to force fan on during request to turn on %s", hvacwire_name(wire));
 						return false;
 					}
 				}
