@@ -237,6 +237,12 @@ int main(int argc, char **argv)
 	gho->gpio[PB_HVACWIRES__W2].gpioline = fabd_get_gpiod_line(gpiochip, json_gpios, "heat 2");
 	// TODO: Support other wires
 	
+	// Set them all to known and sane states (noop since Linux GPIO resets everything nowadays)
+	control_wire_safe(gho, PB_HVACWIRES__W2, false);
+	control_wire_safe(gho, PB_HVACWIRES__Y1, false);
+	control_wire_safe(gho, PB_HVACWIRES__OB, false);
+	control_wire_safe(gho, PB_HVACWIRES__G , false);
+	
 	my_zmq_context = zmq_ctx_new();
 	start_zap_handler(my_zmq_context);
 	
