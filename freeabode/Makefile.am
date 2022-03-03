@@ -4,7 +4,8 @@ libfreeabode_la_SOURCES = \
 	fabdcfg.c \
 	logging.c \
 	security.c \
-	util.c
+	util.c \
+	util_hvac.c
 nodist_libfreeabode_la_SOURCES = $(builddir)/freeabode.pb-c.c
 libfreeabode_la_CFLAGS = $(LIBSODIUM_CFLAGS) $(LIBZMQ_CFLAGS) $(PROTOBUF_C_CFLAGS)
 libfreeabode_la_CFLAGS += -I$(builddir)
@@ -17,6 +18,7 @@ libfreeabode_include_HEADERS = \
 	logging.h \
 	security.h \
 	util.h  \
+	util_hvac.h \
 	$(builddir)/freeabode.pb-c.h
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libfreeabode.pc
