@@ -192,7 +192,7 @@ int main(int argc, char **argv)
 			applog(LOG_ERR, "bme280_set_sensor_mode failed");
 			goto schedule_next_poll;
 		}
-		my_delay_us(req_delay, bme280->intf_ptr);
+		my_delay_us(req_delay * 1000, bme280->intf_ptr);
 		if (BME280_OK != bme280_get_sensor_data(BME280_TEMP | BME280_HUM, &data, bme280)) {
 			applog(LOG_ERR, "bme280_get_sensor_data failed");
 			goto schedule_next_poll;
