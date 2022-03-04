@@ -46,7 +46,7 @@ void dfbassert_(DFBResult err, const char *file, int line, const char *expr)
 static const char *my_devid;
 static void *my_zmq_context;
 
-struct my_font font_h2, font_h4;
+struct my_font font_h2, font_h4, font_buttons;
 
 wallknob_event_handler_func current_event_handler;
 
@@ -158,6 +158,12 @@ struct weather_windows {
 	struct my_window_info i_hvac;
 	struct my_window_info i_charging;
 	struct my_window_info circle;
+};
+
+struct button_windows {
+	struct my_window_info btn_up;
+	struct my_window_info btn_ok;
+	struct my_window_info btn_down;
 };
 
 static
@@ -765,6 +771,34 @@ void handle_button_press()
 }
 
 static
+void draw_button(struct my_window_info * const wi, uint8_t r, uint8_t g, uint8_t b, const char * const label)
+{
+	dfbassert(wi->surface->Clear(wi->surface, r, g, b, 0x1f));
+	dfbassert(wi->surface->SetColor(wi->surface, 0x80, 0xff, 0x20, 0xff));
+	dfbassert(wi->surface->SetFont(wi->surface, font_buttons.dfbfont));
+	dfbassert(wi->surface->DrawString(wi->surface, label, -1, wi->sz.w / 2, font_buttons.height, DSTF_CENTER));
+	dfbassert(wi->surface->Flip(wi->surface, NULL, DSFLIP_BLIT));
+}
+
+static
+void draw_buttons(struct button_windows * const bw)
+{
+	my_win_init(&bw->btn_up);
+	my_win_init(&bw->btn_ok);
+	my_win_init(&bw->btn_down);
+	
+// 	const char * const utf8_upwards_white_arrow = "\xe2\x87\xa7";
+	const char * const utf8_greek_capital_letter_lambda = "\xce\x9b";
+// 	const char * const utf8_gear = "\xe2\x9a\x99";
+	const char * const utf8_combining_cyrillic_millions_sign = "\xd2\x89";
+// 	const char * const utf8_downwards_white_arrow = "\xe2\x87\xa9";
+	
+	draw_button(&bw->btn_up, 0xff, 0, 0, utf8_greek_capital_letter_lambda);
+	draw_button(&bw->btn_ok, 0, 0xff, 0, utf8_combining_cyrillic_millions_sign);
+	draw_button(&bw->btn_down, 0, 0, 0xff, "V");
+}
+
+static
 enum temperature_units fabd_parse_units(const char * const s)
 {
 	switch (s ? s[0] : 0)
@@ -782,6 +816,8 @@ enum temperature_units fabd_parse_units(const char * const s)
 static void main_event_handler(DFBEvent *);
 
 static IDirectFBEventBuffer *evbuf;
+static IDirectFBDisplayLayer *layer;
+static int width, height;
 
 int main(int argc, char **argv)
 {
@@ -794,21 +830,33 @@ int main(int argc, char **argv)
 	
 	temperature_units = fabd_parse_units(fabdcfg_device_getstr(my_devid, "units"));
 	
-	IDirectFBDisplayLayer *layer;
 	struct weather_windows weather_windows;
+	struct button_windows button_windows;
 	
 	dfbassert(DirectFBCreate(&dfb));
 	dfbassert(dfb->GetDisplayLayer(dfb, DLID_PRIMARY, &layer));
 	dfbassert(layer->SetCooperativeLevel(layer, DLSCL_ADMINISTRATIVE));
-	dfbassert(layer->EnableCursor(layer, 0));
+	dfbassert(layer->EnableCursor(layer, 1));
+	dfbassert(layer->SetCursorOpacity(layer, 0));
 	dfbassert(layer->SetBackgroundMode(layer, DLBM_COLOR));
 	dfbassert(layer->SetBackgroundColor(layer, 0, 0, 0, 0xff));
 	IDirectFBSurface *surface;
 	dfbassert(layer->GetSurface(layer, &surface));
 	{
-		int width, height;
+		int button_width = 0;
 		dfbassert(surface->GetSize(surface, &width, &height));
 		const int width_full = width;
+		
+		if (fabdcfg_device_getbool(my_devid, "buttons", false)) {
+			if (width > height + 0x40) {
+				// Just use the excess width for buttons
+				button_width = width - height;
+			} else {
+				button_width = 0x40;
+			}
+			width -= button_width;
+		}
+		
 		const int center_x = width / 2;
 		const int center_y = height / 2;
 		
@@ -874,13 +922,35 @@ int main(int argc, char **argv)
 		
 		zmq_threadstart(weather_thread, &weather_windows);
 		
-		windesc.flags &= ~(DWDESC_CAPS | DWDESC_OPTIONS);
-		windesc.width = width_full;
+		windesc.width = width_full - button_width;
 		windesc.posx = 0;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		top_wi.win = window;
 		my_win_init(&top_wi);
 		dfbassert(top_wi.win->SetOpacity(top_wi.win, 0));
+		
+		if (button_width) {
+			font_dsc.width = button_width / 3;
+			my_load_font(&font_buttons, FONT_NAME, &font_dsc);
+			
+			windesc.posx = width;
+			windesc.width = button_width;
+			windesc.height = height / 3;
+			dfbassert(layer->CreateWindow(layer, &windesc, &window));
+			button_windows.btn_up.win = window;
+			
+			windesc.posy = height / 3;
+			windesc.height = height - ((height / 3) * 2);  // 2/3 rounded up
+			dfbassert(layer->CreateWindow(layer, &windesc, &window));
+			button_windows.btn_ok.win = window;
+			
+			windesc.posy = height - (height / 3);
+			windesc.height = height / 3;
+			dfbassert(layer->CreateWindow(layer, &windesc, &window));
+			button_windows.btn_down.win = window;
+			
+			draw_buttons(&button_windows);
+		}
 	}
 	
 	current_event_handler = main_event_handler;
@@ -950,6 +1020,28 @@ retry: ;
 					// Ignore key presses from devices of unknown type
 					goto retry;
 				break;
+			}
+		}
+	}
+	else if (ev->input.type == DIET_BUTTONPRESS) {
+		int x, y;
+		dfbassert(layer->GetCursorPosition(layer, &x, &y));
+		if (x >= width) {
+			if (y < height / 3) {
+				// Up button
+				ev->input.type = DIET_KEYPRESS;
+				ev->input.key_id = DIKI_UP;
+				ev->input.flags |= DIEF_KEYID;
+			} else if (y >= height - height / 3) {
+				// Down button
+				ev->input.type = DIET_KEYPRESS;
+				ev->input.key_id = DIKI_DOWN;
+				ev->input.flags |= DIEF_KEYID;
+			} else {
+				// OK button
+				ev->input.type = DIET_KEYPRESS;
+				ev->input.key_id = DIKI_ENTER;
+				ev->input.flags |= DIEF_KEYID;
 			}
 		}
 	}
