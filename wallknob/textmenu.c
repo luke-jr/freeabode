@@ -90,7 +90,17 @@ redraw: ;
 				scroll -= (double)ev.input.axisrel / 0x100;
 				goto redraw;
 			case DIET_KEYPRESS:
-				goto done;
+				switch ((ev.input.flags & DIEF_KEYID) ? ev.input.key_id : DIKI_UNKNOWN)
+				{
+					case DIKI_UP:
+						--scroll;
+						goto redraw;
+					case DIKI_DOWN:
+						++scroll;
+						goto redraw;
+					default:
+						goto done;
+				}
 			default:
 				break;
 		}

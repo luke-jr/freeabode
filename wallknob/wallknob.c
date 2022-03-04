@@ -969,7 +969,17 @@ void main_event_handler(DFBEvent * const ev)
 			
 			break;
 		case DIET_KEYPRESS:
-			handle_button_press();
+			switch ((ev->input.flags & DIEF_KEYID) ? ev->input.key_id : DIKI_UNKNOWN)
+			{
+				case DIKI_UP:
+					handle_knob_turn(-40);
+					break;
+				case DIKI_DOWN:
+					handle_knob_turn(40);
+					break;
+				default:
+					handle_button_press();
+			}
 			break;
 		default:
 			break;
