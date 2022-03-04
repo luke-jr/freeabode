@@ -808,6 +808,7 @@ int main(int argc, char **argv)
 	{
 		int width, height;
 		dfbassert(surface->GetSize(surface, &width, &height));
+		const int width_full = width;
 		const int center_x = width / 2;
 		const int center_y = height / 2;
 		
@@ -874,6 +875,8 @@ int main(int argc, char **argv)
 		zmq_threadstart(weather_thread, &weather_windows);
 		
 		windesc.flags &= ~(DWDESC_CAPS | DWDESC_OPTIONS);
+		windesc.width = width_full;
+		windesc.posx = 0;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		top_wi.win = window;
 		my_win_init(&top_wi);
