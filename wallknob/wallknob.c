@@ -811,6 +811,8 @@ int main(int argc, char **argv)
 		const int center_x = width / 2;
 		const int center_y = height / 2;
 		
+		if (width > height) width = height;
+		
 		DFBFontDescription font_dsc = {
 			.flags = DFDESC_WIDTH,
 			.width = width * 2 / 3 / 4,
@@ -862,7 +864,8 @@ int main(int argc, char **argv)
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		weather_windows.clock.win = window;
 		
-		windesc.posx = windesc.posy = 0;
+		windesc.posx = center_x - (width / 2);
+		windesc.posy = 0;
 		windesc.width = width;
 		windesc.height = height;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
