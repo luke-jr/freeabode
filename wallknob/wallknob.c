@@ -981,6 +981,9 @@ void main_event_handler(DFBEvent * const ev)
 					handle_button_press();
 			}
 			break;
+		case DIET_BUTTONPRESS:
+			handle_button_press();
+			break;
 		default:
 			break;
 	}
