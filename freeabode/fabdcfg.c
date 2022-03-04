@@ -89,6 +89,28 @@ json_t *fabdcfg_device_get(const char * const devid, const char * const key)
 	return NULL;
 }
 
+bool fabdcfg_device_getbool(const char * const devid, const char * const key, const bool def)
+{
+	json_t * const j = fabdcfg_device_get(devid, key);
+	if (!j) return def;
+	switch (json_typeof(j)) {
+		case JSON_ARRAY:
+			return json_array_size(j) != 0;
+		case JSON_STRING:
+			return json_string_value(j)[0] != '\0';
+		case JSON_INTEGER:
+			return json_integer_value(j) != 0;
+		case JSON_REAL:
+			return json_real_value(j) != 0;
+		case JSON_FALSE:
+			return false;
+		case JSON_NULL:
+			return def;
+		default:
+			return true;
+	}
+}
+
 const char *fabdcfg_device_getstr(const char * const devid, const char * const key)
 {
 	json_t * const j = fabdcfg_device_get(devid, key);
