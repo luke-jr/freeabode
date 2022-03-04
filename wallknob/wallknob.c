@@ -916,6 +916,9 @@ retry: ;
 	}
 	dfbassert(evbuf->GetEvent(evbuf, ev));
 	
+	if (ev->clazz != DFEC_INPUT)
+		return;
+	
 	if (ev->input.type == DIET_KEYPRESS && (ev->input.flags & DIEF_KEYID))
 	{
 		switch (ev->input.key_id)
