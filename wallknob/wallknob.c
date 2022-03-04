@@ -785,6 +785,7 @@ static IDirectFBEventBuffer *evbuf;
 
 int main(int argc, char **argv)
 {
+	dfbassert(DirectFBInit(&argc, &argv));
 	my_devid = fabd_common_argv(argc, argv, "wallknob");
 	load_freeabode_key();
 	my_zmq_context = zmq_ctx_new();
@@ -796,7 +797,6 @@ int main(int argc, char **argv)
 	IDirectFBDisplayLayer *layer;
 	struct weather_windows weather_windows;
 	
-	dfbassert(DirectFBInit(&argc, &argv));
 	dfbassert(DirectFBCreate(&dfb));
 	dfbassert(dfb->GetDisplayLayer(dfb, DLID_PRIMARY, &layer));
 	dfbassert(layer->SetCooperativeLevel(layer, DLSCL_ADMINISTRATIVE));
