@@ -213,6 +213,9 @@ void populate_hvacgoals(PbHVACGoals * const goals, const struct tstat_data * con
 	
 	goals->has_temp_hysteresis = true;
 	goals->temp_hysteresis = tstat->t_hysteresis;
+	
+	goals->has_fan_mode = true;
+	goals->fan_mode = (tstat->fan_always_on ? PB_FAN_MODE__AlwaysOn : PB_FAN_MODE__Auto);
 }
 
 void handle_req(struct tstat_data *tstat)
@@ -233,6 +236,9 @@ void handle_req(struct tstat_data *tstat)
 		
 		if (req->hvacgoals->has_temp_hysteresis)
 			tstat->t_hysteresis = req->hvacgoals->temp_hysteresis;
+		
+		if (req->hvacgoals->has_fan_mode)
+			tstat_set_fan_always_on(tstat, (req->hvacgoals->fan_mode == PB_FAN_MODE__AlwaysOn));
 		
 		populate_hvacgoals(&goalreply, tstat);
 		reply.hvacgoals = &goalreply;
