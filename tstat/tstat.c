@@ -39,6 +39,7 @@ struct tstat_data {
 	int t_goal_low;
 	int t_goal_high;
 	int t_hysteresis;
+	bool fan_always_on;
 	
 	// State
 	enum tstat_mode mode;
@@ -85,6 +86,29 @@ bool hvac_control_wire(void *ctl, PbHVACWires wire, bool connect)
 	bool rv = reply->sethvacwiresuccess[0];
 	pb_request_reply__free_unpacked(reply, NULL);
 	return rv;
+}
+
+static
+bool tstat_set_fan_always_on(struct tstat_data * const tstat, const bool newvalue)
+{
+	if (tstat->fan_always_on == newvalue) return true;
+	
+	if (newvalue) {
+		if (!hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__G, true)) {
+			applog(LOG_ERR, "FAILED to turn on fan");
+			return false;
+		}
+		tstat->fan_always_on = true;
+	} else {
+		tstat->fan_always_on = false;
+		if (!(tstat->mode != TSM_OFF || timespec_isset(&tstat->ts_turn_fan_off))) {
+			if (!hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__G, false)) {
+				applog(LOG_ERR, "FAILED to turn off fan");
+				return false;
+			}
+		}
+	}
+	return true;
 }
 
 static
@@ -281,6 +305,8 @@ int main(int argc, char **argv)
 	freeabode_zmq_security(tstat->server_ctl, true);
 	assert(fabdcfg_zmq_bind(my_devid, "control", tstat->server_ctl));
 	
+	tstat_set_fan_always_on(tstat, fabdcfg_device_getbool(my_devid, "fan", false));
+	
 	zmq_pollitem_t pollitems[] = {
 		{ .socket = tstat->client_weather, .events = ZMQ_POLLIN },
 		{ .socket = tstat->server_ctl, .events = ZMQ_POLLIN },
@@ -323,6 +349,11 @@ int main(int argc, char **argv)
 		}
 		if (timespec_passed(&tstat->ts_turn_fan_off, &ts_now, &ts_timeout))
 		{
+			if(tstat->fan_always_on) {
+				timespec_clear(&tstat->ts_turn_fan_off);
+				continue;
+			}
+			
 			applog(LOG_INFO, "Turning off fan");
 			timespec_add_ms(&ts_now, shutoff_delay_ms, &tstat->ts_earliest_compressor);
 			if (hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__G , false))
