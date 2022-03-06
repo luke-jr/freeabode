@@ -32,10 +32,18 @@ message PbSetHVACWireRequest {
 	required bool connect = 2;
 }
 
+enum PbFanMode {
+	AlwaysOff = 0;
+	AlwaysOn = 1;
+	Auto = 2;
+	Ignore = 3;
+}
+
 message PbHVACGoals {
 	optional int32 temp_high = 1;
 	optional int32 temp_hysteresis = 2;
 	optional int32 temp_low = 3;
+	optional PbFanMode fan_mode = 4;
 }
 
 message PbRequest {
