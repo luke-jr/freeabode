@@ -264,6 +264,29 @@ char *fabdcfg_server_get_connect(const char * const devid, const char * const se
 	return NULL;
 }
 
+static
+void fabdcfg_zmq_connect_init_heartbeat(void * const socket)
+{
+	int option_value;
+	size_t option_len = sizeof(option_value);
+	if (0 != zmq_getsockopt(socket, ZMQ_HEARTBEAT_IVL, &option_value, &option_len))
+		return;
+	if (option_len != sizeof(option_value) || option_value > 0)
+		return;
+	
+	option_value = 60000;
+	if (0 != zmq_setsockopt(socket, ZMQ_HEARTBEAT_IVL, &option_value, sizeof(option_value)))
+		return;
+	
+	if (0 != zmq_getsockopt(socket, ZMQ_HEARTBEAT_TIMEOUT, &option_value, &option_len))
+		return;
+	if (option_len != sizeof(option_value) || option_value > 0)
+		return;
+	
+	option_value = 10000;
+	zmq_setsockopt(socket, ZMQ_HEARTBEAT_TIMEOUT, &option_value, sizeof(option_value));
+}
+
 bool fabdcfg_zmq_connect(const char * const devid, const char * const clientname, void * const socket)
 {
 	json_t *j = fabdcfg_device_get(devid, "clients");
@@ -287,6 +310,8 @@ bool fabdcfg_zmq_connect(const char * const devid, const char * const clientname
 				s = sfree = fabdcfg_server_get_connect(dest_devid, dest_servername, devid);
 			}
 		}
+		
+		fabdcfg_zmq_connect_init_heartbeat(socket);
 		
 		if (zmq_connect(socket, s))
 			success = false;
