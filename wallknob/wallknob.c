@@ -29,7 +29,7 @@ static enum temperature_units temperature_units;
 static int redraw_pipe[2];
 
 #define ADJUSTMENT_DELAY_SECS  1, 318
-#define FONT_NAME  "DroidSansMono.ttf"
+#define FONT_NAME  "font.ttf"
 
 static const long nsec_to_timmill = 0x4e94914f;
 
