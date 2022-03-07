@@ -612,7 +612,7 @@ void weather_thread(void * const userp)
 	my_win_init(&ww->i_hvac);
 	my_win_init(&ww->i_charging);
 	my_win_init(&ww->humid);
-	my_win_init(&ww->circle);
+	if (ww->circle.win) my_win_init(&ww->circle);
 	
 	zmq_pollitem_t pollitems[] = {
 		{ .socket = client_tstat, .events = ZMQ_POLLIN },
@@ -659,7 +659,7 @@ void weather_thread(void * const userp)
 		if (pollitems[4].revents & ZMQ_POLLIN)
 			wires_recv(ww, client_wires);
 		
-		update_win_circle(&ww->circle, current_temp, goal_high, goal_low);
+		if (ww->circle.win) update_win_circle(&ww->circle, current_temp, goal_high, goal_low);
 	}
 }
 
@@ -871,7 +871,8 @@ int main(int argc, char **argv)
 		};
 		
 		int info_width = width;
-		{
+		const bool show_circle = fabdcfg_device_getbool(my_devid, "show_circle", true);
+		if (show_circle) {
 			windesc.posx = center_x - (width / 2);
 			windesc.posy = 0;
 			windesc.width = width;
@@ -895,6 +896,9 @@ int main(int argc, char **argv)
 		windesc.height = font_h2.height - font_h2.descender;
 		windesc.posx = center_x - (windesc.width / 2);
 		windesc.posy = (height / 2) - (font_h2.height - font_h2.ascender) - font_h2.height;
+		if (!show_circle) {
+			windesc.posy -= font_h2.height / 2;
+		}
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		weather_windows.clock.win = window;
 		
