@@ -776,7 +776,7 @@ void draw_button(struct my_window_info * const wi, uint8_t r, uint8_t g, uint8_t
 	dfbassert(wi->surface->Clear(wi->surface, r, g, b, 0x1f));
 	dfbassert(wi->surface->SetColor(wi->surface, 0x80, 0xff, 0x20, 0xff));
 	dfbassert(wi->surface->SetFont(wi->surface, font_buttons.dfbfont));
-	dfbassert(wi->surface->DrawString(wi->surface, label, -1, wi->sz.w / 2, font_buttons.height, DSTF_CENTER));
+	dfbassert(wi->surface->DrawString(wi->surface, label, -1, wi->sz.w / 2, (wi->sz.h + font_buttons.height + font_buttons.descender) / 2 + font_buttons.descender, DSTF_CENTER));
 	dfbassert(wi->surface->Flip(wi->surface, NULL, DSFLIP_BLIT));
 }
 
