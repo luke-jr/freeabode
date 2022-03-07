@@ -862,6 +862,23 @@ int main(int argc, char **argv)
 		
 		if (width > height) width = height;
 		
+		weather_windows = (struct weather_windows){0};
+		IDirectFBWindow *window;
+		DFBWindowDescription windesc = {
+			.flags = DWDESC_CAPS | DWDESC_WIDTH | DWDESC_HEIGHT | DWDESC_POSX | DWDESC_POSY | DWDESC_OPTIONS,
+			.caps = DWCAPS_ALPHACHANNEL,
+			.options = DWOP_ALPHACHANNEL,
+		};
+		
+		{
+			windesc.posx = center_x - (width / 2);
+			windesc.posy = 0;
+			windesc.width = width;
+			windesc.height = height;
+			dfbassert(layer->CreateWindow(layer, &windesc, &window));
+			weather_windows.circle.win = window;
+		}
+		
 		DFBFontDescription font_dsc = {
 			.flags = DFDESC_WIDTH,
 			.width = width * 2 / 3 / 4,
@@ -871,21 +888,12 @@ int main(int argc, char **argv)
 		font_dsc.width /= 2;
 		my_load_font(&font_h4, FONT_NAME, &font_dsc);
 		
-		IDirectFBWindow *window;
-		DFBWindowDescription windesc = {
-			.flags = DWDESC_CAPS | DWDESC_WIDTH | DWDESC_HEIGHT | DWDESC_POSX | DWDESC_POSY | DWDESC_OPTIONS,
-			.caps = DWCAPS_ALPHACHANNEL,
-			.width = (width * 2 / 3 / 2) - (font_h2.width_x / 2),
-			.height = font_h2.height - font_h2.descender,
-			.posy = 0,
-			.options = DWOP_ALPHACHANNEL,
-		};
+		windesc.width = (width * 2 / 3 / 2) - (font_h2.width_x / 2);
+		windesc.height = font_h2.height - font_h2.descender;
 		windesc.posx = center_x - (windesc.width + font_h2.width_x / 2);
 		windesc.posy = (height / 2) - (font_h2.height - font_h2.ascender);
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
-		weather_windows = (struct weather_windows){
-			.temp.win = window,
-		};
+		weather_windows.temp.win = window;
 		
 		windesc.posx += windesc.width + font_h2.width_x;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
@@ -913,17 +921,12 @@ int main(int argc, char **argv)
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		weather_windows.clock.win = window;
 		
-		windesc.posx = center_x - (width / 2);
-		windesc.posy = 0;
-		windesc.width = width;
-		windesc.height = height;
-		dfbassert(layer->CreateWindow(layer, &windesc, &window));
-		weather_windows.circle.win = window;
-		
 		zmq_threadstart(weather_thread, &weather_windows);
 		
 		windesc.width = width_full - button_width;
+		windesc.height = height;
 		windesc.posx = 0;
+		windesc.posy = 0;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		top_wi.win = window;
 		my_win_init(&top_wi);
