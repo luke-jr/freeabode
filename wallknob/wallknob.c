@@ -870,6 +870,7 @@ int main(int argc, char **argv)
 			.options = DWOP_ALPHACHANNEL,
 		};
 		
+		int info_width = width;
 		{
 			windesc.posx = center_x - (width / 2);
 			windesc.posy = 0;
@@ -877,28 +878,30 @@ int main(int argc, char **argv)
 			windesc.height = height;
 			dfbassert(layer->CreateWindow(layer, &windesc, &window));
 			weather_windows.circle.win = window;
+			
+			info_width = info_width * 2 / 3;
 		}
 		
 		DFBFontDescription font_dsc = {
 			.flags = DFDESC_WIDTH,
-			.width = width * 2 / 3 / 4,
+			.width = info_width / 4,
 		};
 		my_load_font(&font_h2, FONT_NAME, &font_dsc);
 		
 		font_dsc.width /= 2;
 		my_load_font(&font_h4, FONT_NAME, &font_dsc);
 		
-		windesc.width = width * 2 / 3;
+		windesc.width = info_width;
 		windesc.height = font_h2.height - font_h2.descender;
 		windesc.posx = center_x - (windesc.width / 2);
 		windesc.posy = (height / 2) - (font_h2.height - font_h2.ascender) - font_h2.height;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		weather_windows.clock.win = window;
 		
-		windesc.width = (width * 2 / 3 / 2) - (font_h2.width_x / 2);
+		windesc.width = (info_width / 2) - (font_h2.width_x / 2);
 		windesc.height = font_h2.height - font_h2.descender;
 		windesc.posx = center_x - (windesc.width + font_h2.width_x / 2);
-		windesc.posy = (height / 2) - (font_h2.height - font_h2.ascender);
+		windesc.posy += font_h2.height;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		weather_windows.temp.win = window;
 		
@@ -912,7 +915,7 @@ int main(int argc, char **argv)
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		weather_windows.tempgoal.win = window;
 		
-		windesc.width = width * 2 / 3;
+		windesc.width = info_width;
 		windesc.posx = center_x - (windesc.width / 2);
 		windesc.posy += font_h4.height;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
