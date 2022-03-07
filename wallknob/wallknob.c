@@ -888,6 +888,13 @@ int main(int argc, char **argv)
 		font_dsc.width /= 2;
 		my_load_font(&font_h4, FONT_NAME, &font_dsc);
 		
+		windesc.width = width * 2 / 3;
+		windesc.height = font_h2.height - font_h2.descender;
+		windesc.posx = center_x - (windesc.width / 2);
+		windesc.posy = (height / 2) - (font_h2.height - font_h2.ascender) - font_h2.height;
+		dfbassert(layer->CreateWindow(layer, &windesc, &window));
+		weather_windows.clock.win = window;
+		
 		windesc.width = (width * 2 / 3 / 2) - (font_h2.width_x / 2);
 		windesc.height = font_h2.height - font_h2.descender;
 		windesc.posx = center_x - (windesc.width + font_h2.width_x / 2);
@@ -914,12 +921,6 @@ int main(int argc, char **argv)
 		windesc.posy += font_h4.height;
 		dfbassert(layer->CreateWindow(layer, &windesc, &window));
 		weather_windows.i_charging.win = window;
-		
-		windesc.height = font_h2.height - font_h2.descender;
-		windesc.posx = center_x - (windesc.width / 2);
-		windesc.posy = (height / 2) - (font_h2.height - font_h2.ascender) - font_h2.height;
-		dfbassert(layer->CreateWindow(layer, &windesc, &window));
-		weather_windows.clock.win = window;
 		
 		zmq_threadstart(weather_thread, &weather_windows);
 		
