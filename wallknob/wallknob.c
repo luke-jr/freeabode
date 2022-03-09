@@ -4,6 +4,7 @@
 #include <math.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -115,6 +116,21 @@ static inline
 int32_t centicelcius_to_tempmill(const int32_t cc)
 {
 	return cc * 0x1000 / 625;
+}
+
+static
+double centicelcius_to_unit(const int32_t temp)
+{
+	switch (temperature_units)
+	{
+		case FTU_CELCIUS:
+			return ((double)temp) / 100.;
+		case FTU_FAHRENHEIT:
+			return ((double)centicelcius_to_millifahrenheit(temp)) / 1000.;
+		case FTU_TONAL:
+			return ((double)centicelcius_to_tempmill(temp)) / 0x100;
+	}
+	abort();
 }
 
 static
@@ -407,21 +423,10 @@ void my_draw_coloured_tick(IDirectFBSurface * const surface, const DFBPoint cent
 }
 
 static
-double my_temp_to_unit(const double temp, const double units_min, const double units_around)
+double centicelcius_to_radian(const int32_t temp, const double units_min, const double units_around)
 {
 	double r = 0.0;
-	switch (temperature_units)
-	{
-		case FTU_CELCIUS:
-			r = ((double)temp) / 100. - units_min;
-			break;
-		case FTU_FAHRENHEIT:
-			r = ((double)centicelcius_to_millifahrenheit(temp)) / 1000. - units_min;
-			break;
-		case FTU_TONAL:
-			r = ((double)centicelcius_to_tempmill(temp)) / 0x100 - units_min;
-			break;
-	}
+	r = centicelcius_to_unit(temp) - units_min;
 	r = fmin(units_around-1, fmax(0, r));
 	return r;
 }
@@ -433,7 +438,7 @@ void win_circle_render_goal(struct my_window_info * const wi, const struct goal_
 		return;
 	
 	const int adjusted_goal = adjusting ? goal_adj(goal) : goal->cur;
-	double adjusted_goal_radian = my_temp_to_unit(adjusted_goal, units_min, units_around);
+	double adjusted_goal_radian = centicelcius_to_radian(adjusted_goal, units_min, units_around);
 	adjusted_goal_radian = (adjusted_goal_radian * radians_per_unit) + radian_offset;
 	dfbassert(wi->surface->SetColor(wi->surface, 0xff, 0xff, 0xff, 0xcf));
 	double temp_hysteresis_radians = radians_per_unit * hysteresis_unit;
@@ -490,7 +495,7 @@ void update_win_circle(struct my_window_info * const wi, const int32_t current_t
 	win_circle_render_goal(wi, goal_low , units_around, units_min, radian_offset, radians_per_unit, hysteresis_unit, center, r1, r3);
 	
 	{
-		double current_temp_unit = my_temp_to_unit(current_temp, units_min, units_around);
+		double current_temp_unit = centicelcius_to_radian(current_temp, units_min, units_around);
 		my_draw_coloured_tick(wi->surface, center, r1, r4, radians_per_unit / 2, current_temp_unit, units_around, radians_per_unit, radian_offset);
 	}
 	
