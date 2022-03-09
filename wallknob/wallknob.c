@@ -200,6 +200,7 @@ struct weather_windows {
 	struct my_window_info i_hvac;
 	struct my_window_info i_charging;
 	struct my_window_info circle;
+	struct my_window_info temperature_bar;
 };
 
 struct button_windows {
@@ -525,6 +526,87 @@ void update_win_circle(struct my_window_info * const wi, const int32_t current_t
 }
 
 static
+void my_draw_tickline(IDirectFBSurface * const surface, const int x1, const int y, const int x2, const int thickness)
+{
+	const int y1 = y - (thickness / 2);
+	const int y2 = y1 + thickness;
+	for (int y = y1; y <= y2; ++y) {
+		dfbassert(surface->DrawLine(surface, x1, y, x2, y));
+	}
+}
+
+static
+void my_draw_coloured_tickline(IDirectFBSurface * const surface, const int x1, const int y, const int x2, const int thickness, const int i, const int units_range)
+{
+	int red, blue;
+	red  = fabd_min(0xff, 0xff * i / (units_range / 2));
+	blue = fabd_min(0xff, 0xff * (units_range - i - 1) / (units_range / 2));
+	dfbassert(surface->SetColor(surface, red, 0, blue, 0xff));
+	my_draw_tickline(surface, x1, y, x2, thickness);
+}
+
+static
+void win_temperature_bar_render_goal(struct my_window_info * const wi, const struct goal_info * const goal, const int units_range, const int units_min, const double y_per_unit, const double hysteresis_unit, const int margin_goal)
+{
+	if (!goal->active)
+		return;
+	
+	const int adjusted_goal = adjusting ? goal_adj(goal) : goal->cur;
+	const double adjusted_goal_i = centicelcius_to_unit(adjusted_goal) - units_min;
+	const int adjusted_goal_y = wi->sz.h - (adjusted_goal_i * y_per_unit);
+	dfbassert(wi->surface->SetColor(wi->surface, 0xff, 0xff, 0xff, 0xcf));
+	double temp_hysteresis_thickness = y_per_unit * hysteresis_unit * 2;
+	my_draw_tickline(wi->surface, margin_goal, adjusted_goal_y, wi->sz.w - margin_goal, temp_hysteresis_thickness);
+}
+
+static
+void update_win_temperature_bar(struct my_window_info * const wi, const int32_t current_temp, const struct goal_info * const goal_high, const struct goal_info * const goal_low)
+{
+	const int height = wi->sz.h;
+	int units_range = 2, units_min = 0, units_base = 10;
+	double hysteresis_unit = 0.0;
+	
+	init_units_range(&units_range, &units_min, &units_base, &hysteresis_unit);
+	const int units_halfbase = units_base / 2;
+	
+	const double y_per_unit = height / units_range;
+	
+	const int margin_current  = 0;
+	const int margin_goal     = wi->sz.w * 2 / 0x10;
+	const int margin_base     = wi->sz.w * 4 / 0x10;
+	const int margin_halfbase = wi->sz.w * 5 / 0x10;
+	const int margin_single   = wi->sz.w * 6 / 0x10;
+	
+	dfbassert(wi->surface->Clear(wi->surface, 0xff, 0xff, 0xff, 0));
+	wi->surface->SetRenderOptions(wi->surface, DSRO_ANTIALIAS);
+	
+	win_temperature_bar_render_goal(wi, goal_high, units_range, units_min, y_per_unit, hysteresis_unit, margin_goal);
+	win_temperature_bar_render_goal(wi, goal_low , units_range, units_min, y_per_unit, hysteresis_unit, margin_goal);
+	
+	{
+		const double current_temp_unit = centicelcius_to_unit(current_temp);
+		const double current_i = (current_temp_unit - units_min);
+		my_draw_coloured_tickline(wi->surface, margin_current, height - (current_i * y_per_unit), wi->sz.w - margin_current, y_per_unit * 2 / 3, current_i, units_range);
+	}
+	
+	for (int i = 0; i < units_range; ++i)
+	{
+		int i_margin;
+		int ix = (units_min + i) % units_base;
+		if (!ix)
+			i_margin = margin_base;
+		else
+		if (ix == units_halfbase)
+			i_margin = margin_halfbase;
+		else
+			i_margin = margin_single;
+		my_draw_coloured_tickline(wi->surface, i_margin, height - (i * y_per_unit), wi->sz.w - i_margin, y_per_unit / 4, i, units_range);
+	}
+	
+	dfbassert(wi->surface->Flip(wi->surface, NULL, DSFLIP_BLIT));
+}
+
+static
 void weather_recv(struct weather_windows * const ww, void * const client_weather, int32_t * const current_temp_p, unsigned *current_humidity)
 {
 	PbEvent *pbevent;
@@ -626,6 +708,7 @@ void weather_thread(void * const userp)
 	my_win_init(&ww->i_charging);
 	my_win_init(&ww->humid);
 	if (ww->circle.win) my_win_init(&ww->circle);
+	if (ww->temperature_bar.win) my_win_init(&ww->temperature_bar);
 	
 	zmq_pollitem_t pollitems[] = {
 		{ .socket = client_tstat, .events = ZMQ_POLLIN },
@@ -673,6 +756,7 @@ void weather_thread(void * const userp)
 			wires_recv(ww, client_wires);
 		
 		if (ww->circle.win) update_win_circle(&ww->circle, current_temp, goal_high, goal_low);
+		if (ww->temperature_bar.win) update_win_temperature_bar(&ww->temperature_bar, current_temp, goal_high, goal_low);
 	}
 }
 
@@ -859,21 +943,17 @@ int main(int argc, char **argv)
 		int button_width = 0;
 		dfbassert(surface->GetSize(surface, &width, &height));
 		const int width_full = width;
+		const int temperature_bar_width = fabdcfg_device_getint(my_devid, "temperature_bar_width", 0) * width * 15 / 1000;
 		
 		if (fabdcfg_device_getbool(my_devid, "buttons", false)) {
-			if (width > height + 0x40) {
+			if (width > height + temperature_bar_width + 0x40) {
 				// Just use the excess width for buttons
-				button_width = width - height;
+				button_width = width - temperature_bar_width - height;
 			} else {
 				button_width = 0x40;
 			}
 			width -= button_width;
 		}
-		
-		const int center_x = width / 2;
-		const int center_y = height / 2;
-		
-		if (width > height) width = height;
 		
 		weather_windows = (struct weather_windows){0};
 		IDirectFBWindow *window;
@@ -884,11 +964,29 @@ int main(int argc, char **argv)
 		};
 		
 		int info_width = width;
+		
+		if (temperature_bar_width) {
+			info_width -= temperature_bar_width;
+			
+			const int actual_temperature_bar_width = temperature_bar_width * 10 / 15;
+			const int temperature_bar_margin = (temperature_bar_width - actual_temperature_bar_width) / 2;
+			windesc.posx = info_width + temperature_bar_margin;
+			windesc.posy = height / 0x10;
+			windesc.width = actual_temperature_bar_width;
+			windesc.height = height - (windesc.posy * 2);
+			dfbassert(layer->CreateWindow(layer, &windesc, &window));
+			weather_windows.temperature_bar.win = window;
+		}
+		
+		if (info_width > height) info_width = height;
+		
+		const int center_x = info_width / 2;
+		
 		const bool show_circle = fabdcfg_device_getbool(my_devid, "show_circle", true);
 		if (show_circle) {
-			windesc.posx = center_x - (width / 2);
+			windesc.posx = center_x - (info_width / 2);
 			windesc.posy = 0;
-			windesc.width = width;
+			windesc.width = info_width;
 			windesc.height = height;
 			dfbassert(layer->CreateWindow(layer, &windesc, &window));
 			weather_windows.circle.win = window;
