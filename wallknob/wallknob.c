@@ -134,6 +134,32 @@ double centicelcius_to_unit(const int32_t temp)
 }
 
 static
+void init_units_range(int * const units_range, int * const units_min, int * const units_base, double * const hysteresis_unit)
+{
+	switch (temperature_units)
+	{
+		case FTU_CELCIUS:
+			*units_range = 30;
+			*units_min = 2;
+			*units_base = 10;
+			*hysteresis_unit = (double)temp_hysteresis / 100.;
+			break;
+		case FTU_FAHRENHEIT:
+			*units_range = 50;
+			*units_min = 40;
+			*units_base = 10;
+			*hysteresis_unit = (double)centicelcius_to_millifahrenheit_delta(temp_hysteresis) / 1000.;
+			break;
+		case FTU_TONAL:
+			*units_range = 0x40;
+			*units_min = 0x10;
+			*hysteresis_unit = (double)centicelcius_to_tempmill(temp_hysteresis) / 0x100;
+			*units_base = 0x10;
+			break;
+	}
+}
+
+static
 void tonalstr(char *buf, size_t bufsz, int32_t n)
 {
 	bool leadingzero = true;
@@ -452,29 +478,11 @@ void update_win_circle(struct my_window_info * const wi, const int32_t current_t
 	const double radians_omit = (M_PI * 2) - radians_around;
 	const double radians_omit_div2 = radians_omit / 2;
 	const double radian_offset = M_PI_2 + radians_omit_div2;
-	int units_around = 2, units_min = 0, units_base = 10, units_halfbase = 5;
+	int units_around = 2, units_min = 0, units_base = 10;
 	double hysteresis_unit = 0.0;
 	
-	switch (temperature_units)
-	{
-		case FTU_CELCIUS:
-			units_around = 30;
-			units_min = 2;
-			hysteresis_unit = (double)temp_hysteresis / 100.;
-			break;
-		case FTU_FAHRENHEIT:
-			units_around = 50;
-			units_min = 40;
-			hysteresis_unit = (double)centicelcius_to_millifahrenheit_delta(temp_hysteresis) / 1000.;
-			break;
-		case FTU_TONAL:
-			units_around = 0x40;
-			units_min = 0x10;
-			hysteresis_unit = (double)centicelcius_to_tempmill(temp_hysteresis) / 0x100;
-			units_base = 0x10;
-			units_halfbase = 8;
-			break;
-	}
+	init_units_range(&units_around, &units_min, &units_base, &hysteresis_unit);
+	const int units_halfbase = units_base / 2;
 	
 	const double radians_per_unit = radians_around / (units_around - 1);
 	
