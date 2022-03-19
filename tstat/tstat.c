@@ -18,6 +18,7 @@ static const int default_temp_goal_low  = 2400;
 static const int default_temp_goal_high = 3020;
 static const int default_temp_hysteresis = 50;
 static const unsigned long fan_before_cool_ms =  10547;
+static const unsigned long reversing_off_after_cool_ms = 5273;
 static const unsigned long  fan_after_cool_ms =  42188;
 static const unsigned long   shutoff_delay_ms = 337500;
 static const unsigned long           retry_ms =   1319;
@@ -48,6 +49,7 @@ struct tstat_data {
 	// Timers
 	struct timespec ts_turn_fan_on;
 	struct timespec ts_turn_compressor_on;
+	struct timespec ts_turn_reversing_off;
 	struct timespec ts_turn_fan_off;
 };
 
@@ -134,7 +136,6 @@ void do_compressor_off(struct tstat_data * const tstat, struct timespec * const 
 		applog(LOG_INFO, "Turning off compressor");
 		bool success = true;
 		success &= hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__Y1, false);
-		success &= hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__OB, false);
 		if (!success)
 			applog(LOG_ERR, "WARNING: Failed to turn off compressor");
 		else
@@ -143,6 +144,7 @@ void do_compressor_off(struct tstat_data * const tstat, struct timespec * const 
 			struct timespec ts_now;
 			clock_gettime(CLOCK_MONOTONIC, &ts_now);
 			timespec_add_ms(&ts_now, fan_after_cool_ms, &tstat->ts_turn_fan_off);
+			timespec_add_ms(&ts_now, reversing_off_after_cool_ms, &tstat->ts_turn_reversing_off);
 		}
 		timespec_add_ms(ts_now, shutoff_delay_ms, &tstat->ts_earliest_compressor);
 	}
@@ -151,6 +153,7 @@ void do_compressor_off(struct tstat_data * const tstat, struct timespec * const 
 static
 void do_compressor_on(struct tstat_data * const tstat, const enum tstat_mode mode)
 {
+	assert(!timespec_isset(&tstat->ts_turn_reversing_off));
 	applog(LOG_INFO, "Preparing to %s", tstat_mode_str(mode));
 	tstat->mode = mode;
 	if (timespec_isset(&tstat->ts_turn_fan_off))
@@ -286,6 +289,7 @@ int main(int argc, char **argv)
 		.t_hysteresis = fabdcfg_device_getint(my_devid, "temp_hysteresis", default_temp_hysteresis),
 		.ts_turn_fan_on = TIMESPEC_INIT_CLEAR,
 		.ts_turn_compressor_on = TIMESPEC_INIT_CLEAR,
+		.ts_turn_reversing_off = TIMESPEC_INIT_CLEAR,
 		.ts_turn_fan_off = TIMESPEC_INIT_CLEAR,
 	}, *tstat = &_tstat;
 	clock_gettime(CLOCK_MONOTONIC, &ts_now);
@@ -342,6 +346,10 @@ int main(int argc, char **argv)
 			applog(LOG_INFO, "Turning on  compressor (OB=%c; mode=%s)", ctl_ob ? 'Y' : 'N', tstat_mode_str(tstat->mode));
 			bool success = true;
 			success &= hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__OB, ctl_ob);
+			if (!success) {
+				applog(LOG_ERR, "FAILED to turn %s reversing valve", ctl_ob ? "on " : "off");
+				goto failed_reversing;
+			}
 			success &= hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__Y1, true);
 			if (success)
 				timespec_clear(&tstat->ts_turn_compressor_on);
@@ -349,7 +357,18 @@ int main(int argc, char **argv)
 			{
 				applog(LOG_ERR, "FAILED to turn on compressor");
 				hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__Y1, false);
+failed_reversing:
 				hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__OB, false);
+				timespec_add_ms(&ts_now, retry_ms, &ts_timeout);
+			}
+		}
+		if (timespec_passed(&tstat->ts_turn_reversing_off, &ts_now, &ts_timeout))
+		{
+			applog(LOG_INFO, "Turning off reversing valve");
+			if (hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__OB, false)) {
+				timespec_clear(&tstat->ts_turn_reversing_off);
+			} else {
+				applog(LOG_ERR, "FAILED to turn off reversing valve");
 				timespec_add_ms(&ts_now, retry_ms, &ts_timeout);
 			}
 		}
@@ -371,12 +390,13 @@ int main(int argc, char **argv)
 			}
 		}
 		{
-			char buf[4][0x100];
+			char buf[5][0x100];
 			timespec_to_str(buf[0], sizeof(buf[0]), &tstat->ts_earliest_compressor);
 			timespec_to_str(buf[1], sizeof(buf[1]), &tstat->ts_turn_fan_on);
 			timespec_to_str(buf[2], sizeof(buf[2]), &tstat->ts_turn_compressor_on);
 			timespec_to_str(buf[3], sizeof(buf[3]), &tstat->ts_turn_fan_off);
-			applog(LOG_DEBUG, "Delay=%s FanOn=%s CompOn=%s FanOff=%s", buf[0], buf[1], buf[2], buf[3]);
+			timespec_to_str(buf[4], sizeof(buf[4]), &tstat->ts_turn_reversing_off);
+			applog(LOG_DEBUG, "Delay=%s FanOn=%s CompOn=%s FanOff=%s RevOff=%s", buf[0], buf[1], buf[2], buf[3], buf[4]);
 		}
 		if (zmq_poll(pollitems, sizeof(pollitems) / sizeof(*pollitems), timespec_to_timeout_ms(&ts_now, &ts_timeout)) <= 0)
 			continue;
