@@ -41,6 +41,7 @@ struct tstat_data {
 	int t_goal_high;
 	int t_hysteresis;
 	bool fan_always_on;
+	bool do_not_start;
 	
 	// State
 	enum tstat_mode mode;
@@ -180,6 +181,7 @@ void do_tstat_logic(struct tstat_data * const tstat, struct timespec * const ts_
 				do_compressor_off(tstat, ts_now);
 			break;
 		case TSM_OFF:
+			if (tstat->do_not_start) break;
 			if (weather->temperature > tstat->t_goal_high + tstat->t_hysteresis)
 				do_compressor_on(tstat, TSM_COOL);
 			else
@@ -219,6 +221,9 @@ void populate_hvacgoals(PbHVACGoals * const goals, const struct tstat_data * con
 	
 	goals->has_fan_mode = true;
 	goals->fan_mode = (tstat->fan_always_on ? PB_FAN_MODE__AlwaysOn : PB_FAN_MODE__Auto);
+	
+	goals->has_do_not_start = true;
+	goals->do_not_start = tstat->do_not_start;
 }
 
 void handle_req(struct tstat_data *tstat)
@@ -242,6 +247,10 @@ void handle_req(struct tstat_data *tstat)
 		
 		if (req->hvacgoals->has_fan_mode)
 			tstat_set_fan_always_on(tstat, (req->hvacgoals->fan_mode == PB_FAN_MODE__AlwaysOn));
+		
+		if (req->hvacgoals->has_do_not_start) {
+			tstat->do_not_start = req->hvacgoals->do_not_start;
+		}
 		
 		populate_hvacgoals(&goalreply, tstat);
 		reply.hvacgoals = &goalreply;
