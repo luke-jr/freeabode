@@ -46,6 +46,7 @@ struct tstat_data {
 	// State
 	enum tstat_mode mode;
 	struct timespec ts_earliest_compressor;
+	bool want_to_start;
 	
 	// Timers
 	struct timespec ts_turn_fan_on;
@@ -67,6 +68,13 @@ const char *tstat_mode_str(const enum tstat_mode mode)
 		case TSM_OFF:
 			return "off";
 	}
+}
+
+static
+void populate_pbevent_want_to_start(PbEvent * const pbevent, const struct tstat_data * const tstat)
+{
+	pbevent->has_want_to_start = true;
+	pbevent->want_to_start = tstat->want_to_start;
 }
 
 static
@@ -115,9 +123,22 @@ bool tstat_set_fan_always_on(struct tstat_data * const tstat, const bool newvalu
 }
 
 static
+void tstat_set_want_to_start(struct tstat_data * const tstat, const bool newvalue)
+{
+	if (tstat->want_to_start == newvalue) return;
+	
+	tstat->want_to_start = newvalue;
+	
+	PbEvent pbevent = PB_EVENT__INIT;
+	populate_pbevent_want_to_start(&pbevent, tstat);
+	zmq_send_protobuf(tstat->server_events, pb_event, &pbevent, 0);
+}
+
+static
 void do_compressor_off(struct tstat_data * const tstat, struct timespec * const ts_now)
 {
 	applog(LOG_INFO, "No %s needed", tstat_mode_str(tstat->mode));
+	if (tstat->want_to_start) tstat_set_want_to_start(tstat, false);
 	if (timespec_isset(&tstat->ts_turn_fan_on))
 	{
 		// Fan hasn't turned on yet, just cancel it
@@ -277,6 +298,7 @@ void got_new_subscriber(void * const s, const struct tstat_data * const tstat)
 	PbHVACGoals goalreply = PB_HVACGOALS__INIT;
 	populate_hvacgoals(&goalreply, tstat);
 	pbevent.hvacgoals = &goalreply;
+	populate_pbevent_want_to_start(&pbevent, tstat);
 	
 	zmq_send_protobuf(s, pb_event, &pbevent, 0);
 	
@@ -334,8 +356,10 @@ int main(int argc, char **argv)
 	{
 		timespec_clear(&ts_timeout);
 		clock_gettime(CLOCK_MONOTONIC, &ts_now);
-		if (timespec_passed(&tstat->ts_turn_fan_on, &ts_now, &ts_timeout) && !tstat->do_not_start)
+		if (timespec_passed(&tstat->ts_turn_fan_on, &ts_now, &ts_timeout))
 		{
+			if (tstat->do_not_start) goto handle_do_not_start;
+			
 			applog(LOG_INFO, "Turning on  fan");
 			if (hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__G , true))
 			{
@@ -348,8 +372,10 @@ int main(int argc, char **argv)
 				timespec_add_ms(&ts_now, retry_ms, &ts_timeout);
 			}
 		}
-		if (timespec_passed(&tstat->ts_turn_compressor_on, &ts_now, &ts_timeout) && !tstat->do_not_start)
+		if (timespec_passed(&tstat->ts_turn_compressor_on, &ts_now, &ts_timeout))
 		{
+			if (tstat->do_not_start) goto handle_do_not_start;
+			
 			const bool ctl_ob = (tstat->mode == TSM_COOL);
 			applog(LOG_INFO, "Turning on  compressor (OB=%c; mode=%s)", ctl_ob ? 'Y' : 'N', tstat_mode_str(tstat->mode));
 			bool success = true;
@@ -360,7 +386,10 @@ int main(int argc, char **argv)
 			}
 			success &= hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__Y1, true);
 			if (success)
+			{
 				timespec_clear(&tstat->ts_turn_compressor_on);
+				if (tstat->want_to_start) tstat_set_want_to_start(tstat, false);
+			}
 			else
 			{
 				applog(LOG_ERR, "FAILED to turn on compressor");
@@ -369,6 +398,10 @@ failed_reversing:
 				hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__OB, false);
 				timespec_add_ms(&ts_now, retry_ms, &ts_timeout);
 			}
+		}
+		if (false) {
+handle_do_not_start:
+			if (!tstat->want_to_start) tstat_set_want_to_start(tstat, true);
 		}
 		if (timespec_passed(&tstat->ts_turn_reversing_off, &ts_now, &ts_timeout))
 		{
