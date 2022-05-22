@@ -181,7 +181,6 @@ void do_tstat_logic(struct tstat_data * const tstat, struct timespec * const ts_
 				do_compressor_off(tstat, ts_now);
 			break;
 		case TSM_OFF:
-			if (tstat->do_not_start) break;
 			if (weather->temperature > tstat->t_goal_high + tstat->t_hysteresis)
 				do_compressor_on(tstat, TSM_COOL);
 			else
@@ -335,7 +334,7 @@ int main(int argc, char **argv)
 	{
 		timespec_clear(&ts_timeout);
 		clock_gettime(CLOCK_MONOTONIC, &ts_now);
-		if (timespec_passed(&tstat->ts_turn_fan_on, &ts_now, &ts_timeout))
+		if (timespec_passed(&tstat->ts_turn_fan_on, &ts_now, &ts_timeout) && !tstat->do_not_start)
 		{
 			applog(LOG_INFO, "Turning on  fan");
 			if (hvac_control_wire(tstat->client_hwctl, PB_HVACWIRES__G , true))
@@ -349,7 +348,7 @@ int main(int argc, char **argv)
 				timespec_add_ms(&ts_now, retry_ms, &ts_timeout);
 			}
 		}
-		if (timespec_passed(&tstat->ts_turn_compressor_on, &ts_now, &ts_timeout))
+		if (timespec_passed(&tstat->ts_turn_compressor_on, &ts_now, &ts_timeout) && !tstat->do_not_start)
 		{
 			const bool ctl_ob = (tstat->mode == TSM_COOL);
 			applog(LOG_INFO, "Turning on  compressor (OB=%c; mode=%s)", ctl_ob ? 'Y' : 'N', tstat_mode_str(tstat->mode));
