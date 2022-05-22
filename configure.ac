@@ -72,6 +72,8 @@ AC_ARG_WITH([libgpiod],
 	[
 		PKG_CHECK_MODULES([LIBGPIOD], [libgpiod],[
 			have_libgpiod=true
+		],[
+			AC_MSG_NOTICE([the gpio_hvac module will not be built])
 		])
 	]
 )
