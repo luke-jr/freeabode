@@ -79,7 +79,7 @@ AC_ARG_WITH([libgpiod],
 )
 AM_CONDITIONAL([HAVE_LIBGPIOD], [$have_libgpiod])
 
-PKG_CHECK_MODULES([JANSSON], [jansson])
+PKG_CHECK_MODULES([JANSSON], [jansson >= 2.5])
 AM_CONDITIONAL([HAVE_JANSSON], [true])
 
 PKG_CHECK_MODULES([LIBSODIUM], [libsodium])
