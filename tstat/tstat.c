@@ -39,6 +39,9 @@ struct tstat_zone_data {
 	int t_goal_low;
 	int t_goal_high;
 	int t_hysteresis;
+	
+	// State
+	int t_latest;
 };
 
 struct tstat_data {
@@ -197,25 +200,27 @@ void do_compressor_on(struct tstat_data * const tstat, const enum tstat_mode mod
 }
 
 static
-void do_tstat_logic(struct tstat_data * const tstat, struct timespec * const ts_now, PbWeather * const weather)
+void do_tstat_logic(struct tstat_data * const tstat, struct timespec * const ts_now)
 {
 	struct tstat_zone_data * const zone = &tstat->zone;
 	switch (tstat->mode)
 	{
 		case TSM_COOL:
-			if (weather->temperature < zone->t_goal_high - zone->t_hysteresis)
+			if (zone->t_latest < zone->t_goal_high - zone->t_hysteresis) {
 				do_compressor_off(tstat, ts_now);
+			}
 			break;
 		case TSM_HEAT:
-			if (weather->temperature > zone->t_goal_low + zone->t_hysteresis)
+			if (zone->t_latest > zone->t_goal_low + zone->t_hysteresis) {
 				do_compressor_off(tstat, ts_now);
+			}
 			break;
 		case TSM_OFF:
-			if (weather->temperature > zone->t_goal_high + zone->t_hysteresis)
+			if (zone->t_latest > zone->t_goal_high + zone->t_hysteresis) {
 				do_compressor_on(tstat, TSM_COOL);
-			else
-			if (weather->temperature < zone->t_goal_low - zone->t_hysteresis)
+			} else if (zone->t_latest < zone->t_goal_low - zone->t_hysteresis) {
 				do_compressor_on(tstat, TSM_HEAT);
+			}
 			break;
 	}
 }
@@ -230,7 +235,8 @@ void read_weather(struct tstat_data * const tstat, struct timespec * const ts_no
 	if (weather && weather->has_temperature)
 	{
 		applog(LOG_INFO, "Temperature %2u.%02u C", (unsigned)(weather->temperature / 100), (unsigned)(weather->temperature % 100));
-		do_tstat_logic(tstat, ts_now, weather);
+		zone->t_latest = weather->temperature;
+		do_tstat_logic(tstat, ts_now);
 	}
 	
 	pb_event__free_unpacked(pbevent, NULL);
