@@ -13,6 +13,7 @@ enum PbHVACWires {
 message PbWeather {
 	optional int32 temperature = 1;
 	optional int32 humidity = 2;
+	optional fixed32 last_update = 3;  // Bottom 31 bits only; high bit indicates unknown
 }
 
 message PbBattery {
