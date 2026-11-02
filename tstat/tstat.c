@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <time.h>
 
+#include <jansson.h>
 #include <zmq.h>
 
 #include <freeabode/fabdcfg.h>
@@ -390,12 +391,12 @@ out:
 
 int main(int argc, char **argv)
 {
-	const char * const my_devid = fabd_common_argv(argc, argv, "tstat");
+	json_t * const my_devids = fabd_common_argv_multidev(argc, argv, (const char *[]){"tstat", NULL});
 	load_freeabode_key();
 	
 	void *my_zmq_context;
 	struct timespec ts_now, ts_timeout;
-	struct tstat_data * const tstat = malloc(sizeof(*tstat) + sizeof(tstat->zones[0]));
+	struct tstat_data * const tstat = malloc(sizeof(*tstat) + (json_array_size(my_devids) * sizeof(*tstat->zones)));
 	*tstat = (struct tstat_data){
 		.ts_turn_fan_on = TIMESPEC_INIT_CLEAR,
 		.ts_turn_compressor_on = TIMESPEC_INIT_CLEAR,
@@ -403,43 +404,56 @@ int main(int argc, char **argv)
 		.ts_turn_fan_off = TIMESPEC_INIT_CLEAR,
 	};
 	
-	tstat->zone_count = 1;
-	tstat->zones[0] = (struct tstat_zone_data){
-		.t_goal_low = fabdcfg_device_getint(my_devid, "temp_low", default_temp_goal_low),
-		.t_goal_high = fabdcfg_device_getint(my_devid, "temp_high", default_temp_goal_high),
-		.t_hysteresis = fabdcfg_device_getint(my_devid, "temp_hysteresis", default_temp_hysteresis),
-	};
-	
 	clock_gettime(CLOCK_MONOTONIC, &ts_now);
 	timespec_add_ms(&ts_now, shutoff_delay_ms, &tstat->ts_earliest_compressor);
 	
 	my_zmq_context = zmq_ctx_new();
 	
+	tstat->zone_count = json_array_size(my_devids);
+	const size_t pollitems_count = 3 * tstat->zone_count;
+	zmq_pollitem_t *pollitems = malloc(sizeof(*pollitems) * pollitems_count);
+	for (size_t dev_n = 0; dev_n < json_array_size(my_devids); ++dev_n) {
+		const char * const my_devid = json_string_value(json_array_get(my_devids, dev_n));
+		assert(my_devid);
+		
+		tstat->zones[dev_n] = (struct tstat_zone_data){
+			.t_goal_low = fabdcfg_device_getint(my_devid, "temp_low", default_temp_goal_low),
+			.t_goal_high = fabdcfg_device_getint(my_devid, "temp_high", default_temp_goal_high),
+			.t_hysteresis = fabdcfg_device_getint(my_devid, "temp_hysteresis", default_temp_hysteresis),
+		};
+		
+		tstat->zones[dev_n].client_weather = zmq_socket(my_zmq_context, ZMQ_SUB);
+		freeabode_zmq_security(tstat->zones[dev_n].client_weather, false);
+		assert(fabdcfg_zmq_connect(my_devid, "weather", tstat->zones[dev_n].client_weather));
+		assert(!zmq_setsockopt(tstat->zones[dev_n].client_weather, ZMQ_SUBSCRIBE, NULL, 0));
+		pollitems[dev_n * 3] = (zmq_pollitem_t)
+			{ .socket = tstat->zones[dev_n].client_weather, .events = ZMQ_POLLIN };
+		
+		tstat->zones[dev_n].server_events = zmq_socket(my_zmq_context, ZMQ_XPUB);
+		freeabode_zmq_security(tstat->zones[dev_n].server_events, true);
+		zmq_setsockopt(tstat->zones[dev_n].server_events, ZMQ_XPUB_VERBOSE, &int_one, sizeof(int_one));
+		assert(fabdcfg_zmq_bind(my_devid, "events", tstat->zones[dev_n].server_events));
+		pollitems[(dev_n * 3) + 2] = (zmq_pollitem_t)
+			{ .socket = tstat->zones[dev_n].server_events, .events = ZMQ_POLLIN };
+		
+		tstat->zones[dev_n].server_ctl = zmq_socket(my_zmq_context, ZMQ_REP);
+		freeabode_zmq_security(tstat->zones[dev_n].server_ctl, true);
+		assert(fabdcfg_zmq_bind(my_devid, "control", tstat->zones[dev_n].server_ctl));
+		pollitems[(dev_n * 3) + 1] = (zmq_pollitem_t)
+			{ .socket = tstat->zones[dev_n].server_ctl, .events = ZMQ_POLLIN };
+	}
+	
 	tstat->client_hwctl = zmq_socket(my_zmq_context, ZMQ_REQ);
 	freeabode_zmq_security(tstat->client_hwctl, false);
-	assert(fabdcfg_zmq_connect(my_devid, "hwctl", tstat->client_hwctl));
+	{
+		// We use only the first devid for hwctl and fan config
+		const char * const my_devid = json_string_value(json_array_get(my_devids, 0));
+		assert(my_devid);
+		assert(fabdcfg_zmq_connect(my_devid, "hwctl", tstat->client_hwctl));
+		
+		tstat_set_fan_always_on(tstat, fabdcfg_device_getbool(my_devid, "fan", false));
+	}
 	
-	tstat->zones[0].client_weather = zmq_socket(my_zmq_context, ZMQ_SUB);
-	freeabode_zmq_security(tstat->zones[0].client_weather, false);
-	assert(fabdcfg_zmq_connect(my_devid, "weather", tstat->zones[0].client_weather));
-	assert(!zmq_setsockopt(tstat->zones[0].client_weather, ZMQ_SUBSCRIBE, NULL, 0));
-	
-	tstat->zones[0].server_events = zmq_socket(my_zmq_context, ZMQ_XPUB);
-	freeabode_zmq_security(tstat->zones[0].server_events, true);
-	zmq_setsockopt(tstat->zones[0].server_events, ZMQ_XPUB_VERBOSE, &int_one, sizeof(int_one));
-	assert(fabdcfg_zmq_bind(my_devid, "events", tstat->zones[0].server_events));
-	
-	tstat->zones[0].server_ctl = zmq_socket(my_zmq_context, ZMQ_REP);
-	freeabode_zmq_security(tstat->zones[0].server_ctl, true);
-	assert(fabdcfg_zmq_bind(my_devid, "control", tstat->zones[0].server_ctl));
-	
-	tstat_set_fan_always_on(tstat, fabdcfg_device_getbool(my_devid, "fan", false));
-	
-	zmq_pollitem_t pollitems[] = {
-		{ .socket = tstat->zones[0].client_weather, .events = ZMQ_POLLIN },
-		{ .socket = tstat->zones[0].server_ctl, .events = ZMQ_POLLIN },
-		{ .socket = tstat->zones[0].server_events, .events = ZMQ_POLLIN },
-	};
 	while (true)
 	{
 		timespec_clear(&ts_timeout);
@@ -527,16 +541,34 @@ handle_do_not_start:
 			timespec_to_str(buf[4], sizeof(buf[4]), &tstat->ts_turn_reversing_off);
 			applog(LOG_DEBUG, "Delay=%s FanOn=%s CompOn=%s FanOff=%s RevOff=%s", buf[0], buf[1], buf[2], buf[3], buf[4]);
 		}
-		if (zmq_poll(pollitems, sizeof(pollitems) / sizeof(*pollitems), timespec_to_timeout_ms(&ts_now, &ts_timeout)) <= 0)
+		if (zmq_poll(pollitems, pollitems_count, timespec_to_timeout_ms(&ts_now, &ts_timeout)) <= 0) {
 			continue;
+		}
 		clock_gettime(CLOCK_MONOTONIC, &ts_now);
-		if (pollitems[0].revents & ZMQ_POLLIN) {
-			readonly_weather(tstat, &ts_now, &tstat->zones[0]);
+		
+		bool any_temperature_changed = false;
+		for (size_t i = 0; i < pollitems_count; i += 3) {
+			if ((pollitems[i].revents & ZMQ_POLLIN) != ZMQ_POLLIN) continue;
+			
+			struct tstat_zone_data * const zone = &tstat->zones[i / 3];
+			any_temperature_changed |= readonly_weather(tstat, &ts_now, zone);
+		}
+		if (any_temperature_changed) {
 			do_tstat_logic(tstat, &ts_now);
 		}
-		if (pollitems[1].revents & ZMQ_POLLIN)
-			handle_req(tstat, &tstat->zones[0]);
-		if (pollitems[2].revents & ZMQ_POLLIN)
-			got_new_subscriber(tstat->zones[0].server_events, tstat, &tstat->zones[0]);
+		
+		for (size_t i = 1; i < pollitems_count; i += 3) {
+			if ((pollitems[i].revents & ZMQ_POLLIN) != ZMQ_POLLIN) continue;
+			
+			struct tstat_zone_data * const zone = &tstat->zones[i / 3];
+			handle_req(tstat, zone);
+		}
+		
+		for (size_t i = 2; i < pollitems_count; i += 3) {
+			if ((pollitems[i].revents & ZMQ_POLLIN) != ZMQ_POLLIN) continue;
+			
+			struct tstat_zone_data * const zone = &tstat->zones[i / 3];
+			got_new_subscriber(zone->server_events, tstat, zone);
+		}
 	}
 }
