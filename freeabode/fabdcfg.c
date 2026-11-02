@@ -69,6 +69,23 @@ const char *fabd_common_argv(int argc, char **argv, const char * const type)
 	return my_devid;
 }
 
+json_t *fabd_common_argv_multidev(const int argc, char ** const argv, const char * const * const types)
+{
+	if (argc < 2)
+	{
+		fprintf(stderr, "Usage: %s <device-id> ...\n", argv[0]);
+		exit(1);
+	}
+	fabdcfg_load_directory();
+	
+	json_t * const rv = json_array();
+	for (int i = 1; i < argc; ++i) {
+		assert(0 == json_array_append_new(rv, json_string(argv[i])));
+		fabdcfg_load_device(argv[i]);
+	}
+	return rv;
+}
+
 json_t *fabdcfg_device_get(const char * const devid, const char * const key)
 {
 	json_t *j;

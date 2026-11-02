@@ -8,6 +8,7 @@
 extern void fabdcfg_load_directory(void);
 extern void fabdcfg_load_device(const char *devid);
 extern const char *fabd_common_argv(int argc, char **argv, const char *type);
+extern json_t *fabd_common_argv_multidev(int argc, char **argv, const char * const *types);
 
 extern json_t *fabdcfg_device_get(const char *devid, const char *key);
 extern bool fabdcfg_device_getbool(const char *devid, const char *key, bool def);
