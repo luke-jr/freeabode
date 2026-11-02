@@ -64,7 +64,8 @@ struct tstat_data {
 	struct timespec ts_turn_reversing_off;
 	struct timespec ts_turn_fan_off;
 	
-	struct tstat_zone_data zone;
+	size_t zone_count;
+	struct tstat_zone_data zones[];
 };
 
 static
@@ -143,7 +144,10 @@ void tstat_set_want_to_start(struct tstat_data * const tstat, const bool newvalu
 	
 	PbEvent pbevent = PB_EVENT__INIT;
 	populate_pbevent_want_to_start(&pbevent, tstat);
-	zmq_send_protobuf(tstat->zone.server_events, pb_event, &pbevent, 0);
+	for (size_t i = 0; i < tstat->zone_count; ++i) {
+		struct tstat_zone_data * const zone = &tstat->zones[i];
+		zmq_send_protobuf(zone->server_events, pb_event, &pbevent, 0);
+	}
 }
 
 static
@@ -201,9 +205,8 @@ void do_compressor_on(struct tstat_data * const tstat, const enum tstat_mode mod
 }
 
 static
-bool tstat_should_run(const struct tstat_data * const tstat, const enum tstat_mode mode, const bool currently_running)
+bool zone_should_run(const struct tstat_zone_data * const zone, const enum tstat_mode mode, const bool currently_running)
 {
-	const struct tstat_zone_data * const zone = &tstat->zone;
 	int warmer, colder;
 	switch (mode) {
 		case TSM_COOL:
@@ -219,6 +222,23 @@ bool tstat_should_run(const struct tstat_data * const tstat, const enum tstat_mo
 	}
 	const int hysteresis = currently_running ? (-1 - zone->t_hysteresis) : zone->t_hysteresis;
 	return warmer > colder + hysteresis;
+}
+
+static
+bool tstat_should_run(const struct tstat_data * const tstat, const enum tstat_mode mode, const bool currently_running)
+{
+	const enum tstat_mode opposite_mode = mode == TSM_HEAT ? TSM_COOL : TSM_HEAT;
+	bool should_run = false;
+	for (size_t i = 0; i < tstat->zone_count; ++i) {
+		const struct tstat_zone_data * const zone = &tstat->zones[i];
+		if (zone_should_run(zone, opposite_mode, false)) {
+			// Never let a zone get so hot/cold it would turn on the opposite
+			return false;
+		} else if (zone_should_run(zone, mode, currently_running)) {
+			should_run = true;
+		}
+	}
+	return should_run;
 }
 
 static
@@ -255,6 +275,20 @@ void read_weather(struct tstat_data * const tstat, struct timespec * const ts_no
 }
 
 static
+void populate_hvacgoals_fan_mode(PbHVACGoals * const goals, const struct tstat_data * const tstat)
+{
+	goals->has_fan_mode = true;
+	goals->fan_mode = (tstat->fan_always_on ? PB_FAN_MODE__AlwaysOn : PB_FAN_MODE__Auto);
+}
+
+static
+void populate_hvacgoals_do_not_start(PbHVACGoals * const goals, const struct tstat_data * const tstat)
+{
+	goals->has_do_not_start = true;
+	goals->do_not_start = tstat->do_not_start;
+}
+
+static
 void populate_hvacgoals(PbHVACGoals * const goals, const struct tstat_data * const tstat, const struct tstat_zone_data * const zone)
 {
 	goals->has_temp_low = true;
@@ -266,11 +300,8 @@ void populate_hvacgoals(PbHVACGoals * const goals, const struct tstat_data * con
 	goals->has_temp_hysteresis = true;
 	goals->temp_hysteresis = zone->t_hysteresis;
 	
-	goals->has_fan_mode = true;
-	goals->fan_mode = (tstat->fan_always_on ? PB_FAN_MODE__AlwaysOn : PB_FAN_MODE__Auto);
-	
-	goals->has_do_not_start = true;
-	goals->do_not_start = tstat->do_not_start;
+	populate_hvacgoals_fan_mode(goals, tstat);
+	populate_hvacgoals_do_not_start(goals, tstat);
 }
 
 void handle_req(struct tstat_data *tstat, struct tstat_zone_data * const zone)
@@ -280,6 +311,8 @@ void handle_req(struct tstat_data *tstat, struct tstat_zone_data * const zone)
 	PbRequestReply reply = PB_REQUEST_REPLY__INIT;
 	PbHVACGoals goalreply = PB_HVACGOALS__INIT;
 	PbEvent pbevent = PB_EVENT__INIT;
+	PbHVACGoals multizone_event = PB_HVACGOALS__INIT;
+	bool multizone = false;
 	
 	if (req->hvacgoals)
 	{
@@ -292,11 +325,19 @@ void handle_req(struct tstat_data *tstat, struct tstat_zone_data * const zone)
 		if (req->hvacgoals->has_temp_hysteresis)
 			zone->t_hysteresis = req->hvacgoals->temp_hysteresis;
 		
-		if (req->hvacgoals->has_fan_mode)
+		if (req->hvacgoals->has_fan_mode) {
+			const bool oldvalue = tstat->fan_always_on;
 			tstat_set_fan_always_on(tstat, (req->hvacgoals->fan_mode == PB_FAN_MODE__AlwaysOn));
+			if (oldvalue != tstat->fan_always_on) {
+				populate_hvacgoals_fan_mode(&multizone_event, tstat);
+				multizone = true;
+			}
+		}
 		
-		if (req->hvacgoals->has_do_not_start) {
+		if (req->hvacgoals->has_do_not_start && tstat->do_not_start != req->hvacgoals->do_not_start) {
 			tstat->do_not_start = req->hvacgoals->do_not_start;
+			populate_hvacgoals_do_not_start(&multizone_event, tstat);
+			multizone = true;
 		}
 		
 		populate_hvacgoals(&goalreply, tstat, zone);
@@ -307,6 +348,15 @@ void handle_req(struct tstat_data *tstat, struct tstat_zone_data * const zone)
 	pb_request__free_unpacked(req, NULL);
 	zmq_send_protobuf(zone->server_ctl, pb_request_reply, &reply, 0);
 	zmq_send_protobuf(zone->server_events, pb_event, &pbevent, 0);
+	
+	if (multizone) {
+		pbevent.hvacgoals = &multizone_event;
+		for (size_t i = 0; i < tstat->zone_count; ++i) {
+			struct tstat_zone_data * const other_zone = &tstat->zones[i];
+			if (other_zone == zone) continue;
+			zmq_send_protobuf(other_zone->server_events, pb_event, &pbevent, 0);
+		}
+	}
 }
 
 void got_new_subscriber(void * const s, const struct tstat_data * const tstat, const struct tstat_zone_data * const zone)
@@ -340,14 +390,16 @@ int main(int argc, char **argv)
 	
 	void *my_zmq_context;
 	struct timespec ts_now, ts_timeout;
-	struct tstat_data _tstat = {
+	struct tstat_data * const tstat = malloc(sizeof(*tstat) + sizeof(tstat->zones[0]));
+	*tstat = (struct tstat_data){
 		.ts_turn_fan_on = TIMESPEC_INIT_CLEAR,
 		.ts_turn_compressor_on = TIMESPEC_INIT_CLEAR,
 		.ts_turn_reversing_off = TIMESPEC_INIT_CLEAR,
 		.ts_turn_fan_off = TIMESPEC_INIT_CLEAR,
-	}, *tstat = &_tstat;
+	};
 	
-	tstat->zone = (struct tstat_zone_data){
+	tstat->zone_count = 1;
+	tstat->zones[0] = (struct tstat_zone_data){
 		.t_goal_low = fabdcfg_device_getint(my_devid, "temp_low", default_temp_goal_low),
 		.t_goal_high = fabdcfg_device_getint(my_devid, "temp_high", default_temp_goal_high),
 		.t_hysteresis = fabdcfg_device_getint(my_devid, "temp_hysteresis", default_temp_hysteresis),
@@ -362,26 +414,26 @@ int main(int argc, char **argv)
 	freeabode_zmq_security(tstat->client_hwctl, false);
 	assert(fabdcfg_zmq_connect(my_devid, "hwctl", tstat->client_hwctl));
 	
-	tstat->zone.client_weather = zmq_socket(my_zmq_context, ZMQ_SUB);
-	freeabode_zmq_security(tstat->zone.client_weather, false);
-	assert(fabdcfg_zmq_connect(my_devid, "weather", tstat->zone.client_weather));
-	assert(!zmq_setsockopt(tstat->zone.client_weather, ZMQ_SUBSCRIBE, NULL, 0));
+	tstat->zones[0].client_weather = zmq_socket(my_zmq_context, ZMQ_SUB);
+	freeabode_zmq_security(tstat->zones[0].client_weather, false);
+	assert(fabdcfg_zmq_connect(my_devid, "weather", tstat->zones[0].client_weather));
+	assert(!zmq_setsockopt(tstat->zones[0].client_weather, ZMQ_SUBSCRIBE, NULL, 0));
 	
-	tstat->zone.server_events = zmq_socket(my_zmq_context, ZMQ_XPUB);
-	freeabode_zmq_security(tstat->zone.server_events, true);
-	zmq_setsockopt(tstat->zone.server_events, ZMQ_XPUB_VERBOSE, &int_one, sizeof(int_one));
-	assert(fabdcfg_zmq_bind(my_devid, "events", tstat->zone.server_events));
+	tstat->zones[0].server_events = zmq_socket(my_zmq_context, ZMQ_XPUB);
+	freeabode_zmq_security(tstat->zones[0].server_events, true);
+	zmq_setsockopt(tstat->zones[0].server_events, ZMQ_XPUB_VERBOSE, &int_one, sizeof(int_one));
+	assert(fabdcfg_zmq_bind(my_devid, "events", tstat->zones[0].server_events));
 	
-	tstat->zone.server_ctl = zmq_socket(my_zmq_context, ZMQ_REP);
-	freeabode_zmq_security(tstat->zone.server_ctl, true);
-	assert(fabdcfg_zmq_bind(my_devid, "control", tstat->zone.server_ctl));
+	tstat->zones[0].server_ctl = zmq_socket(my_zmq_context, ZMQ_REP);
+	freeabode_zmq_security(tstat->zones[0].server_ctl, true);
+	assert(fabdcfg_zmq_bind(my_devid, "control", tstat->zones[0].server_ctl));
 	
 	tstat_set_fan_always_on(tstat, fabdcfg_device_getbool(my_devid, "fan", false));
 	
 	zmq_pollitem_t pollitems[] = {
-		{ .socket = tstat->zone.client_weather, .events = ZMQ_POLLIN },
-		{ .socket = tstat->zone.server_ctl, .events = ZMQ_POLLIN },
-		{ .socket = tstat->zone.server_events, .events = ZMQ_POLLIN },
+		{ .socket = tstat->zones[0].client_weather, .events = ZMQ_POLLIN },
+		{ .socket = tstat->zones[0].server_ctl, .events = ZMQ_POLLIN },
+		{ .socket = tstat->zones[0].server_events, .events = ZMQ_POLLIN },
 	};
 	while (true)
 	{
@@ -474,10 +526,10 @@ handle_do_not_start:
 			continue;
 		clock_gettime(CLOCK_MONOTONIC, &ts_now);
 		if (pollitems[0].revents & ZMQ_POLLIN)
-			read_weather(tstat, &ts_now, &tstat->zone);
+			read_weather(tstat, &ts_now, &tstat->zones[0]);
 		if (pollitems[1].revents & ZMQ_POLLIN)
-			handle_req(tstat, &tstat->zone);
+			handle_req(tstat, &tstat->zones[0]);
 		if (pollitems[2].revents & ZMQ_POLLIN)
-			got_new_subscriber(tstat->zone.server_events, tstat, &tstat->zone);
+			got_new_subscriber(tstat->zones[0].server_events, tstat, &tstat->zones[0]);
 	}
 }
