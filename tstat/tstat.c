@@ -258,20 +258,25 @@ void do_tstat_logic(struct tstat_data * const tstat, struct timespec * const ts_
 }
 
 static
-void read_weather(struct tstat_data * const tstat, struct timespec * const ts_now, struct tstat_zone_data * const zone)
+bool readonly_weather(struct tstat_data * const tstat, struct timespec * const ts_now, struct tstat_zone_data * const zone)
 {
 	PbEvent *pbevent;
 	zmq_recv_protobuf(zone->client_weather, pb_event, pbevent, NULL);
 	PbWeather *weather = pbevent->weather;
+	bool rv = false;
 	
 	if (weather && weather->has_temperature)
 	{
 		applog(LOG_INFO, "Temperature %2u.%02u C", (unsigned)(weather->temperature / 100), (unsigned)(weather->temperature % 100));
-		zone->t_latest = weather->temperature;
-		do_tstat_logic(tstat, ts_now);
+		if (zone->t_latest != weather->temperature) {
+			zone->t_latest = weather->temperature;
+			rv = true;
+		}
 	}
 	
 	pb_event__free_unpacked(pbevent, NULL);
+	
+	return rv;
 }
 
 static
@@ -525,8 +530,10 @@ handle_do_not_start:
 		if (zmq_poll(pollitems, sizeof(pollitems) / sizeof(*pollitems), timespec_to_timeout_ms(&ts_now, &ts_timeout)) <= 0)
 			continue;
 		clock_gettime(CLOCK_MONOTONIC, &ts_now);
-		if (pollitems[0].revents & ZMQ_POLLIN)
-			read_weather(tstat, &ts_now, &tstat->zones[0]);
+		if (pollitems[0].revents & ZMQ_POLLIN) {
+			readonly_weather(tstat, &ts_now, &tstat->zones[0]);
+			do_tstat_logic(tstat, &ts_now);
+		}
 		if (pollitems[1].revents & ZMQ_POLLIN)
 			handle_req(tstat, &tstat->zones[0]);
 		if (pollitems[2].revents & ZMQ_POLLIN)
