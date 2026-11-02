@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -24,6 +25,7 @@ static const unsigned long reversing_off_after_cool_ms = 5273;
 static const unsigned long  fan_after_cool_ms =  42188;
 static const unsigned long   shutoff_delay_ms = 337500;
 static const unsigned long           retry_ms =   1319;
+static const unsigned int stale_data_limit_seconds = 337;
 
 enum tstat_mode {
 	TSM_OFF,
@@ -44,6 +46,7 @@ struct tstat_zone_data {
 	
 	// State
 	int t_latest;
+	uint64_t ts_last_update;
 };
 
 struct tstat_data {
@@ -226,12 +229,16 @@ bool zone_should_run(const struct tstat_zone_data * const zone, const enum tstat
 }
 
 static
-bool tstat_should_run(const struct tstat_data * const tstat, const enum tstat_mode mode, const bool currently_running)
+bool tstat_should_run(const struct tstat_data * const tstat, const enum tstat_mode mode, const bool currently_running, const uint64_t stale_data_cutoff)
 {
 	const enum tstat_mode opposite_mode = mode == TSM_HEAT ? TSM_COOL : TSM_HEAT;
 	bool should_run = false;
 	for (size_t i = 0; i < tstat->zone_count; ++i) {
 		const struct tstat_zone_data * const zone = &tstat->zones[i];
+		if (zone->ts_last_update < stale_data_cutoff) {
+			// data too old, ignore this zone
+			continue;
+		}
 		if (zone_should_run(zone, opposite_mode, false)) {
 			// Never let a zone get so hot/cold it would turn on the opposite
 			return false;
@@ -245,14 +252,15 @@ bool tstat_should_run(const struct tstat_data * const tstat, const enum tstat_mo
 static
 void do_tstat_logic(struct tstat_data * const tstat, struct timespec * const ts_now)
 {
+	const uint64_t stale_data_cutoff = ts_now->tv_sec - stale_data_limit_seconds;
 	if (tstat->mode == TSM_OFF) {
-		if (tstat_should_run(tstat, TSM_COOL, false)) {
+		if (tstat_should_run(tstat, TSM_COOL, false, stale_data_cutoff)) {
 			do_compressor_on(tstat, TSM_COOL);
-		} else if (tstat_should_run(tstat, TSM_HEAT, false)) {
+		} else if (tstat_should_run(tstat, TSM_HEAT, false, stale_data_cutoff)) {
 			do_compressor_on(tstat, TSM_HEAT);
 		}
 	} else {
-		if (!tstat_should_run(tstat, tstat->mode, true)) {
+		if (!tstat_should_run(tstat, tstat->mode, true, stale_data_cutoff)) {
 			do_compressor_off(tstat, ts_now);
 		}
 	}
@@ -266,12 +274,34 @@ bool readonly_weather(struct tstat_data * const tstat, struct timespec * const t
 	PbWeather *weather = pbevent->weather;
 	bool rv = false;
 	
-	if (weather && weather->has_temperature)
-	{
-		applog(LOG_INFO, "Temperature %2u.%02u C", (unsigned)(weather->temperature / 100), (unsigned)(weather->temperature % 100));
-		if (zone->t_latest != weather->temperature) {
-			zone->t_latest = weather->temperature;
-			rv = true;
+	if (weather) {
+		if (weather->has_temperature) {
+			applog(LOG_INFO, "Temperature %2u.%02u C", (unsigned)(weather->temperature / 100), (unsigned)(weather->temperature % 100));
+			if (zone->t_latest != weather->temperature) {
+				zone->t_latest = weather->temperature;
+				rv = true;
+			}
+			if (!zone->ts_last_update) {
+				zone->ts_last_update = UINT64_MAX;
+				rv = true;
+			}
+		}
+		
+		if (weather->has_last_update) {
+			const uint64_t now = time(NULL);  // CAUTION: ts_now is a monotonic clock, not realtime
+			const uint64_t stale_data_cutoff = now - stale_data_limit_seconds;
+			const bool was_stale = zone->ts_last_update < stale_data_cutoff;
+			
+			if (weather->last_update >> 31) {
+				zone->ts_last_update = UINT64_MAX;
+			} else {
+				const int32_t delta = (int32_t)((now - weather->last_update + 0x40000000ULL) & 0x7fffffffULL) - 0x40000000;
+				zone->ts_last_update = now - delta;
+			}
+			
+			if (was_stale && zone->ts_last_update >= stale_data_cutoff) {
+				rv = true;
+			}
 		}
 	}
 	
