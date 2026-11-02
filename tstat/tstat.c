@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
 #include <zmq.h>
@@ -200,28 +201,39 @@ void do_compressor_on(struct tstat_data * const tstat, const enum tstat_mode mod
 }
 
 static
-void do_tstat_logic(struct tstat_data * const tstat, struct timespec * const ts_now)
+bool tstat_should_run(const struct tstat_data * const tstat, const enum tstat_mode mode, const bool currently_running)
 {
-	struct tstat_zone_data * const zone = &tstat->zone;
-	switch (tstat->mode)
-	{
+	const struct tstat_zone_data * const zone = &tstat->zone;
+	int warmer, colder;
+	switch (mode) {
 		case TSM_COOL:
-			if (zone->t_latest < zone->t_goal_high - zone->t_hysteresis) {
-				do_compressor_off(tstat, ts_now);
-			}
+			warmer = zone->t_latest;
+			colder = zone->t_goal_high;
 			break;
 		case TSM_HEAT:
-			if (zone->t_latest > zone->t_goal_low + zone->t_hysteresis) {
-				do_compressor_off(tstat, ts_now);
-			}
+			warmer = zone->t_goal_low;
+			colder = zone->t_latest;
 			break;
 		case TSM_OFF:
-			if (zone->t_latest > zone->t_goal_high + zone->t_hysteresis) {
-				do_compressor_on(tstat, TSM_COOL);
-			} else if (zone->t_latest < zone->t_goal_low - zone->t_hysteresis) {
-				do_compressor_on(tstat, TSM_HEAT);
-			}
-			break;
+		default: abort();
+	}
+	const int hysteresis = currently_running ? (-1 - zone->t_hysteresis) : zone->t_hysteresis;
+	return warmer > colder + hysteresis;
+}
+
+static
+void do_tstat_logic(struct tstat_data * const tstat, struct timespec * const ts_now)
+{
+	if (tstat->mode == TSM_OFF) {
+		if (tstat_should_run(tstat, TSM_COOL, false)) {
+			do_compressor_on(tstat, TSM_COOL);
+		} else if (tstat_should_run(tstat, TSM_HEAT, false)) {
+			do_compressor_on(tstat, TSM_HEAT);
+		}
+	} else {
+		if (!tstat_should_run(tstat, tstat->mode, true)) {
+			do_compressor_off(tstat, ts_now);
+		}
 	}
 }
 
