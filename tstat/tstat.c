@@ -34,6 +34,8 @@ enum tstat_mode {
 };
 
 struct tstat_zone_data {
+	const char *devid;
+	
 	// ZMQ sockets
 	void *client_weather;
 	void *server_events;
@@ -286,7 +288,7 @@ bool readonly_weather(struct tstat_data * const tstat, struct timespec * const t
 	
 	if (weather) {
 		if (weather->has_temperature) {
-			applog(LOG_INFO, "Temperature %2u.%02u C", (unsigned)(weather->temperature / 100), (unsigned)(weather->temperature % 100));
+			applog(LOG_INFO, "Temperature %2u.%02u C at %s", (unsigned)(weather->temperature / 100), (unsigned)(weather->temperature % 100), zone->devid);
 			if (zone->t_latest != weather->temperature) {
 				zone->t_latest = weather->temperature;
 				rv = true;
@@ -462,6 +464,7 @@ int main(int argc, char **argv)
 		assert(my_devid);
 		
 		tstat->zones[dev_n] = (struct tstat_zone_data){
+			.devid = my_devid,
 			.t_goal_low = fabdcfg_device_getint(my_devid, "temp_low", default_temp_goal_low),
 			.t_goal_high = fabdcfg_device_getint(my_devid, "temp_high", default_temp_goal_high),
 			.t_hysteresis = fabdcfg_device_getint(my_devid, "temp_hysteresis", default_temp_hysteresis),
