@@ -3,6 +3,8 @@ Design
 
 freeabode: Library of general-purpose or otherwise shared code for FreeAbode components.
 
+bme280/htu21d: Interface to temperature/humidity sensors.
+
 gpio_hvac: GPIO-based HVAC controls (like the HestiaPi)
 
 nbp: Nest backplate interface.
