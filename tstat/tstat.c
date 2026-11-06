@@ -74,6 +74,9 @@ struct tstat_data {
 	struct tstat_zone_data zones[];
 };
 
+#define PRItemp "%2u.%02u C"
+#define PRINTF_TEMP(v)  (unsigned)((v) / 100), (unsigned)((v) % 100)
+
 static
 const char *tstat_mode_str(const enum tstat_mode mode)
 {
@@ -288,7 +291,9 @@ bool readonly_weather(struct tstat_data * const tstat, struct timespec * const t
 	
 	if (weather) {
 		if (weather->has_temperature) {
-			applog(LOG_INFO, "Temperature %2u.%02u C at %s", (unsigned)(weather->temperature / 100), (unsigned)(weather->temperature % 100), zone->devid);
+			applog(LOG_INFO, "Temperature "PRItemp" at %s",
+			       PRINTF_TEMP(weather->temperature),
+			       zone->devid);
 			if (zone->t_latest != weather->temperature) {
 				zone->t_latest = weather->temperature;
 				rv = true;
