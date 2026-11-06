@@ -359,25 +359,46 @@ void handle_req(struct tstat_data *tstat, struct tstat_zone_data * const zone)
 	
 	if (req->hvacgoals)
 	{
-		if (req->hvacgoals->has_temp_low)
+		if (req->hvacgoals->has_temp_low && zone->t_goal_low != req->hvacgoals->temp_low) {
+			applog(LOG_INFO, "Changing %s goal_low  from "PRItemp" to "PRItemp,
+			       zone->devid,
+			       PRINTF_TEMP(zone->t_goal_low),
+			       PRINTF_TEMP(req->hvacgoals->temp_low));
 			zone->t_goal_low = req->hvacgoals->temp_low;
+		}
 		
-		if (req->hvacgoals->has_temp_high)
+		if (req->hvacgoals->has_temp_high && zone->t_goal_high != req->hvacgoals->temp_high) {
+			applog(LOG_INFO, "Changing %s goal_high from "PRItemp" to "PRItemp,
+			       zone->devid,
+			       PRINTF_TEMP(zone->t_goal_high),
+			       PRINTF_TEMP(req->hvacgoals->temp_high));
 			zone->t_goal_high = req->hvacgoals->temp_high;
+		}
 		
-		if (req->hvacgoals->has_temp_hysteresis)
+		if (req->hvacgoals->has_temp_hysteresis && zone->t_hysteresis != req->hvacgoals->temp_hysteresis) {
+			applog(LOG_INFO, "Changing %s temp_hysteresis from "PRItemp" to "PRItemp,
+			       zone->devid,
+			       PRINTF_TEMP(zone->t_hysteresis),
+			       PRINTF_TEMP(req->hvacgoals->temp_hysteresis));
 			zone->t_hysteresis = req->hvacgoals->temp_hysteresis;
+		}
 		
 		if (req->hvacgoals->has_fan_mode) {
 			const bool oldvalue = tstat->fan_always_on;
 			tstat_set_fan_always_on(tstat, (req->hvacgoals->fan_mode == PB_FAN_MODE__AlwaysOn));
 			if (oldvalue != tstat->fan_always_on) {
+				applog(LOG_INFO, "Changing (global) fan_always_on from %u to %u",
+				       (unsigned)oldvalue,
+				       (unsigned)tstat->fan_always_on);
 				populate_hvacgoals_fan_mode(&multizone_event, tstat);
 				multizone = true;
 			}
 		}
 		
 		if (req->hvacgoals->has_do_not_start && tstat->do_not_start != req->hvacgoals->do_not_start) {
+			applog(LOG_INFO, "Changing (global) do_not_start from %u to %u",
+			       (unsigned)tstat->do_not_start,
+			       (unsigned)req->hvacgoals->do_not_start);
 			tstat->do_not_start = req->hvacgoals->do_not_start;
 			populate_hvacgoals_do_not_start(&multizone_event, tstat);
 			multizone = true;
